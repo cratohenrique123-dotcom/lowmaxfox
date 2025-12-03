@@ -1,0 +1,18 @@
+{
+  "name": "LowMax",
+  "short_name": "LowMax",
+  "description": "Seu guia de evolução facial e aparência",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070a10",
+  "theme_color": "#00b4ff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
