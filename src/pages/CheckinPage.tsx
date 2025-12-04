@@ -84,16 +84,26 @@ export default function CheckinPage() {
 
   const completionPercentage = Math.round((selectedHabits.length / habits.length) * 100);
 
-  // Get last 7 days with correct weekday ordering
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - i)); // Start from 6 days ago to today
-    return {
-      dateStr: getLocalDateString(date),
-      weekdayIndex: getWeekdayIndex(date),
-      isToday: i === 6,
-    };
-  });
+  // Get current week (Mon-Sun) with correct ordering
+  const getCurrentWeekDays = () => {
+    const today = new Date();
+    const currentDayIndex = getWeekdayIndex(today); // 0=Mon, 6=Sun
+    
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      // Calculate days from Monday of current week
+      const daysFromMonday = i - currentDayIndex;
+      date.setDate(today.getDate() + daysFromMonday);
+      
+      return {
+        dateStr: getLocalDateString(date),
+        weekdayIndex: i, // 0=seg, 1=ter, ..., 6=dom
+        isToday: i === currentDayIndex,
+      };
+    });
+  };
+
+  const weekDays = getCurrentWeekDays();
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -122,10 +132,10 @@ export default function CheckinPage() {
         <Card variant="glass" className="p-4">
           <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Últimos 7 dias</span>
+            <span className="text-sm font-medium">Semana Atual</span>
           </div>
           <div className="flex justify-between">
-            {last7Days.map(({ dateStr, weekdayIndex, isToday }) => {
+            {weekDays.map(({ dateStr, weekdayIndex, isToday }) => {
               const hasCheckin = userData.checkins[dateStr]?.length > 0;
               return (
                 <div key={dateStr} className="text-center">
