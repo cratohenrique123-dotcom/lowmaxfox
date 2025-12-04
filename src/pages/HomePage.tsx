@@ -80,6 +80,21 @@ export default function HomePage() {
           <div className="bg-card border border-primary/30 rounded-2xl p-5 shadow-[0_0_20px_hsl(200,100%,50%/0.2)]">
             <h3 className="text-sm font-semibold mb-4 text-muted-foreground">Sua Pontuação</h3>
             <div className="flex items-center justify-between">
+              {/* User Photo */}
+              {userData.photos.front && (
+                <>
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary shadow-[0_0_15px_hsl(200,100%,50%/0.5)]">
+                      <img
+                        src={userData.photos.front}
+                        alt="Sua foto"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                  <div className="h-12 w-px bg-border" />
+                </>
+              )}
               <div className="text-center">
                 <p className="text-3xl font-bold text-primary">{userData.scores.overall}</p>
                 <p className="text-xs text-muted-foreground">Geral</p>
