@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useApp } from "@/context/AppContext";
-import { Camera, Upload, Check, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Camera, Upload, Check, User, ChevronLeft, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { getImageHash, detectFace, checkForDuplicates } from "@/lib/imageUtils";
 
 type PhotoType = "front" | "leftProfile" | "rightProfile";
 
@@ -17,28 +18,96 @@ const photoTypes: { type: PhotoType; label: string; icon: string }[] = [
 
 export default function PhotoUploadPage() {
   const navigate = useNavigate();
-  const { userData, setUserPhoto } = useApp();
+  const { userData, setUserPhoto, canAnalyze, getRemainingAnalyses } = useApp();
   const [loading, setLoading] = useState(false);
+  const [validating, setValidating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeType, setActiveType] = useState<PhotoType>("front");
+  const [photoHashes, setPhotoHashes] = useState<Record<PhotoType, string>>({
+    front: "",
+    leftProfile: "",
+    rightProfile: "",
+  });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
+    if (!file) return;
+
+    setValidating(true);
+    
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const result = event.target?.result as string;
+      
+      try {
+        // 1. Check if it's a human face
+        const faceDetection = await detectFace(result);
+        if (!faceDetection.hasHumanFace) {
+          toast.error("Imagem inválida", {
+            description: "Por favor, envie uma foto de um rosto humano real.",
+          });
+          setValidating(false);
+          return;
+        }
+        
+        // 2. Generate hash for duplicate detection
+        const newHash = await getImageHash(result);
+        
+        // 3. Check for duplicates with other uploaded photos
+        const existingHashes = Object.entries(photoHashes)
+          .filter(([key, hash]) => key !== activeType && hash)
+          .map(([, hash]) => hash);
+        
+        // Also check against previous analysis photos
+        const previousAnalysisHashes = userData.analysisHistory
+          .flatMap(entry => entry.photoHashes)
+          .filter(Boolean);
+        
+        const allExistingHashes = [...existingHashes, ...previousAnalysisHashes];
+        
+        if (allExistingHashes.length > 0) {
+          const duplicateCheck = await checkForDuplicates(newHash, allExistingHashes, 80);
+          
+          if (duplicateCheck.isDuplicate) {
+            const isPreviousAnalysis = duplicateCheck.mostSimilarIndex >= existingHashes.length;
+            
+            if (isPreviousAnalysis) {
+              toast.error("Foto já utilizada", {
+                description: "Esta foto é muito similar a uma usada em análises anteriores. Use uma foto nova para resultados precisos.",
+              });
+              setValidating(false);
+              return;
+            } else {
+              toast.error("Foto duplicada detectada", {
+                description: `Esta foto é muito similar a outra já enviada (${Math.round(duplicateCheck.similarityScore)}% de similaridade). Use fotos diferentes.`,
+              });
+              setValidating(false);
+              return;
+            }
+          }
+        }
+        
+        // Photo passed all validations
         setUserPhoto(activeType, result);
-        toast.success(`Foto ${photoTypes.find(p => p.type === activeType)?.label} carregada!`);
-      };
-      reader.readAsDataURL(file);
-    }
+        setPhotoHashes(prev => ({ ...prev, [activeType]: newHash }));
+        toast.success(`Foto ${photoTypes.find(p => p.type === activeType)?.label} validada e carregada!`);
+        
+      } catch (error) {
+        console.error("Error validating photo:", error);
+        toast.error("Erro ao validar foto. Tente novamente.");
+      } finally {
+        setValidating(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset input
+    e.target.value = "";
   };
 
   const handleCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      // For simplicity, we'll use file input. In a real app, you'd implement camera capture
       stream.getTracks().forEach(track => track.stop());
       fileInputRef.current?.click();
     } catch {
@@ -49,12 +118,25 @@ export default function PhotoUploadPage() {
   const allPhotosUploaded =
     userData.photos.front && userData.photos.leftProfile && userData.photos.rightProfile;
 
+  const remainingAnalyses = getRemainingAnalyses();
+  const canProceed = canAnalyze();
+
   const handleAnalyze = () => {
+    if (!canProceed) {
+      toast.error("Limite de análises atingido", {
+        description: "Você já usou suas 2 análises desta semana. Aguarde a próxima semana.",
+      });
+      return;
+    }
+    
     if (allPhotosUploaded) {
       setLoading(true);
-      // Simulate analysis
       setTimeout(() => {
-        navigate("/analysis");
+        navigate("/analysis", { 
+          state: { 
+            photoHashes: [photoHashes.front, photoHashes.leftProfile, photoHashes.rightProfile] 
+          } 
+        });
       }, 1500);
     }
   };
@@ -92,6 +174,25 @@ export default function PhotoUploadPage() {
           3 fotos para uma análise completa
         </p>
       </div>
+
+      {/* Weekly Limit Info */}
+      <Card className={`p-3 mb-6 ${remainingAnalyses === 0 ? "border-orange-500/50 bg-orange-500/10" : "border-primary/30"}`}>
+        <div className="flex items-center gap-2">
+          {remainingAnalyses === 0 ? (
+            <AlertTriangle className="w-5 h-5 text-orange-500" />
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
+              <span className="text-xs font-bold text-primary">{remainingAnalyses}</span>
+            </div>
+          )}
+          <span className="text-sm">
+            {remainingAnalyses === 0 
+              ? "Limite semanal atingido. Aguarde a próxima semana."
+              : `${remainingAnalyses} análise${remainingAnalyses > 1 ? "s" : ""} disponível esta semana`
+            }
+          </span>
+        </div>
+      </Card>
 
       {/* Photo Grid */}
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -139,6 +240,7 @@ export default function PhotoUploadPage() {
             variant="neonOutline"
             className="flex-1"
             onClick={handleCamera}
+            disabled={validating}
           >
             <Camera className="w-5 h-5" />
             Câmera
@@ -147,11 +249,17 @@ export default function PhotoUploadPage() {
             variant="neonOutline"
             className="flex-1"
             onClick={() => fileInputRef.current?.click()}
+            disabled={validating}
           >
             <Upload className="w-5 h-5" />
             Galeria
           </Button>
         </div>
+        {validating && (
+          <p className="text-center text-sm text-muted-foreground mt-3">
+            Validando imagem...
+          </p>
+        )}
       </Card>
 
       {/* Status */}
@@ -171,7 +279,7 @@ export default function PhotoUploadPage() {
         variant="neon"
         size="lg"
         className="w-full"
-        disabled={!allPhotosUploaded || loading}
+        disabled={!allPhotosUploaded || loading || !canProceed}
         onClick={handleAnalyze}
       >
         {loading ? (

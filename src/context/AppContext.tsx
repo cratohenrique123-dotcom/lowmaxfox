@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
+interface AnalysisResult {
+  overall: number;
+  potential: number;
+  jawline: number;
+  symmetry: number;
+  skinQuality: number;
+  cheekbones: number;
+  strengths: string[];
+  weaknesses: string[];
+}
+
 interface UserData {
   goal: string;
   photos: {
@@ -7,20 +18,20 @@ interface UserData {
     leftProfile: string | null;
     rightProfile: string | null;
   };
-  scores: {
-    overall: number;
-    potential: number;
-    jawline: number;
-    symmetry: number;
-    skinQuality: number;
-    cheekbones: number;
-  } | null;
+  scores: AnalysisResult | null;
   checkins: Record<string, string[]>;
   evolution: {
     before: string | null;
     after: string | null;
     period: string;
   }[];
+  analysisHistory: {
+    date: string;
+    photoHashes: string[];
+  }[];
+  lastAnalysisDate: string | null;
+  weeklyAnalysisCount: number;
+  weekStartDate: string | null;
 }
 
 interface AppContextType {
@@ -32,6 +43,9 @@ interface AppContextType {
   addEvolution: (entry: UserData["evolution"][0]) => void;
   isLoggedIn: boolean;
   setIsLoggedIn: (value: boolean) => void;
+  canAnalyze: () => boolean;
+  recordAnalysis: (photoHashes: string[]) => void;
+  getRemainingAnalyses: () => number;
 }
 
 const defaultUserData: UserData = {
@@ -44,14 +58,39 @@ const defaultUserData: UserData = {
   scores: null,
   checkins: {},
   evolution: [],
+  analysisHistory: [],
+  lastAnalysisDate: null,
+  weeklyAnalysisCount: 0,
+  weekStartDate: null,
 };
 
 const AppContext = createContext<AppContextType | null>(null);
 
+// Helper to get the start of the current week (Monday)
+function getWeekStart(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now.setDate(diff));
+  monday.setHours(0, 0, 0, 0);
+  return monday.toISOString().split("T")[0];
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userData, setUserData] = useState<UserData>(() => {
     const saved = localStorage.getItem("lowmax_userData");
-    return saved ? JSON.parse(saved) : defaultUserData;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migration for older data
+      return {
+        ...defaultUserData,
+        ...parsed,
+        analysisHistory: parsed.analysisHistory || [],
+        weeklyAnalysisCount: parsed.weeklyAnalysisCount || 0,
+        weekStartDate: parsed.weekStartDate || null,
+      };
+    }
+    return defaultUserData;
   });
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem("lowmax_loggedIn") === "true";
@@ -64,6 +103,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem("lowmax_loggedIn", String(isLoggedIn));
   }, [isLoggedIn]);
+
+  // Check if week has reset
+  useEffect(() => {
+    const currentWeekStart = getWeekStart();
+    if (userData.weekStartDate !== currentWeekStart) {
+      setUserData((prev) => ({
+        ...prev,
+        weeklyAnalysisCount: 0,
+        weekStartDate: currentWeekStart,
+      }));
+    }
+  }, [userData.weekStartDate]);
 
   const setUserGoal = (goal: string) => {
     setUserData((prev) => ({ ...prev, goal }));
@@ -94,6 +145,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const canAnalyze = (): boolean => {
+    const currentWeekStart = getWeekStart();
+    if (userData.weekStartDate !== currentWeekStart) {
+      return true; // New week, can analyze
+    }
+    return userData.weeklyAnalysisCount < 2;
+  };
+
+  const getRemainingAnalyses = (): number => {
+    const currentWeekStart = getWeekStart();
+    if (userData.weekStartDate !== currentWeekStart) {
+      return 2;
+    }
+    return Math.max(0, 2 - userData.weeklyAnalysisCount);
+  };
+
+  const recordAnalysis = (photoHashes: string[]) => {
+    const today = new Date().toISOString().split("T")[0];
+    const currentWeekStart = getWeekStart();
+    
+    setUserData((prev) => ({
+      ...prev,
+      analysisHistory: [
+        ...prev.analysisHistory,
+        { date: today, photoHashes },
+      ],
+      lastAnalysisDate: today,
+      weeklyAnalysisCount: prev.weekStartDate === currentWeekStart 
+        ? prev.weeklyAnalysisCount + 1 
+        : 1,
+      weekStartDate: currentWeekStart,
+    }));
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -105,6 +190,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addEvolution,
         isLoggedIn,
         setIsLoggedIn,
+        canAnalyze,
+        recordAnalysis,
+        getRemainingAnalyses,
       }}
     >
       {children}
