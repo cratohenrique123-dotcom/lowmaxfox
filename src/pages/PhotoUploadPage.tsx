@@ -56,7 +56,7 @@ export default function PhotoUploadPage() {
   const handleAnalyze = () => {
     if (!canProceed) {
       toast.error("Limite de análises atingido", {
-        description: "Você já usou suas 2 análises desta semana. Aguarde a próxima semana.",
+        description: "Você já atingiu o limite de 3 análises nesta semana. Tente novamente daqui alguns dias.",
       });
       return;
     }
@@ -94,6 +94,21 @@ export default function PhotoUploadPage() {
         <div className="h-1 flex-1 bg-primary rounded-full" />
         <div className="h-1 flex-1 bg-border rounded-full" />
       </div>
+
+      {/* Status Message */}
+      {canProceed ? (
+        <Card className="p-4 mb-6 border-green-500/30 bg-green-500/10">
+          <p className="text-sm text-green-400 text-center font-medium">
+            ✓ Análise disponível. Envie suas fotos.
+          </p>
+        </Card>
+      ) : (
+        <Card className="p-4 mb-6 border-orange-500/30 bg-orange-500/10">
+          <p className="text-sm text-orange-400 text-center font-medium">
+            ⚠️ Limite semanal atingido. Tente novamente nos próximos dias.
+          </p>
+        </Card>
+      )}
 
       {/* Title */}
       <div className="text-center mb-6 animate-fade-in">

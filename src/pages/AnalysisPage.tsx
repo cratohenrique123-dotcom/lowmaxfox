@@ -169,7 +169,7 @@ export default function AnalysisPage() {
   const handleNewAnalysis = () => {
     if (!canDoNewAnalysis) {
       toast.error("Limite de análises atingido", {
-        description: "Você já usou suas 2 análises desta semana. Aguarde a próxima semana.",
+        description: "Você já atingiu o limite de 3 análises nesta semana. Tente novamente daqui alguns dias.",
       });
       return;
     }

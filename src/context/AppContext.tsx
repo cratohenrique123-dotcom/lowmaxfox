@@ -67,14 +67,15 @@ const defaultUserData: UserData = {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-// Helper to get the start of the current week (Monday)
-function getWeekStart(): string {
+// Helper to get analyses in the last 7 days
+function getAnalysesInLast7Days(history: { date: string }[]): number {
   const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(now.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-  return monday.toISOString().split("T")[0];
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  return history.filter(entry => {
+    const entryDate = new Date(entry.date);
+    return entryDate >= sevenDaysAgo && entryDate <= now;
+  }).length;
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -105,17 +106,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("lowmax_loggedIn", String(isLoggedIn));
   }, [isLoggedIn]);
 
-  // Check if week has reset
-  useEffect(() => {
-    const currentWeekStart = getWeekStart();
-    if (userData.weekStartDate !== currentWeekStart) {
-      setUserData((prev) => ({
-        ...prev,
-        weeklyAnalysisCount: 0,
-        weekStartDate: currentWeekStart,
-      }));
-    }
-  }, [userData.weekStartDate]);
 
   const setUserGoal = (goal: string) => {
     setUserData((prev) => ({ ...prev, goal }));
@@ -147,32 +137,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const canAnalyze = (): boolean => {
-    const currentWeekStart = getWeekStart();
-    if (userData.weekStartDate !== currentWeekStart) {
-      return true; // New week, can analyze
-    }
-    return userData.weeklyAnalysisCount < 2;
+    const recentAnalyses = getAnalysesInLast7Days(userData.analysisHistory);
+    return recentAnalyses < 3;
   };
 
   const getRemainingAnalyses = (): number => {
-    const currentWeekStart = getWeekStart();
-    if (userData.weekStartDate !== currentWeekStart) {
-      return 2;
-    }
-    return Math.max(0, 2 - userData.weeklyAnalysisCount);
+    const recentAnalyses = getAnalysesInLast7Days(userData.analysisHistory);
+    return Math.max(0, 3 - recentAnalyses);
   };
 
   const recordAnalysis = () => {
-    const today = new Date().toISOString().split("T")[0];
-    const currentWeekStart = getWeekStart();
+    const now = new Date().toISOString();
     
     setUserData((prev) => ({
       ...prev,
-      lastAnalysisDate: today,
-      weeklyAnalysisCount: prev.weekStartDate === currentWeekStart 
-        ? prev.weeklyAnalysisCount + 1 
-        : 1,
-      weekStartDate: currentWeekStart,
+      lastAnalysisDate: now,
+      analysisHistory: [...prev.analysisHistory, { date: now, photoHashes: [] }],
     }));
   };
 
