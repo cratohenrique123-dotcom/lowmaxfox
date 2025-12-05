@@ -30,6 +30,7 @@ export default function LoginPage() {
       setIsLoggedIn(true);
       toast.success("Login realizado com sucesso!");
       setIsLoading(false);
+      navigate("/onboarding");
     }, 1000);
   };
 

@@ -9,6 +9,7 @@ interface AnalysisResult {
   cheekbones: number;
   strengths: string[];
   weaknesses: string[];
+  tips?: string[];
 }
 
 interface UserData {
@@ -44,7 +45,7 @@ interface AppContextType {
   isLoggedIn: boolean;
   setIsLoggedIn: (value: boolean) => void;
   canAnalyze: () => boolean;
-  recordAnalysis: (photoHashes: string[]) => void;
+  recordAnalysis: () => void;
   getRemainingAnalyses: () => number;
 }
 
@@ -161,16 +162,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return Math.max(0, 2 - userData.weeklyAnalysisCount);
   };
 
-  const recordAnalysis = (photoHashes: string[]) => {
+  const recordAnalysis = () => {
     const today = new Date().toISOString().split("T")[0];
     const currentWeekStart = getWeekStart();
     
     setUserData((prev) => ({
       ...prev,
-      analysisHistory: [
-        ...prev.analysisHistory,
-        { date: today, photoHashes },
-      ],
       lastAnalysisDate: today,
       weeklyAnalysisCount: prev.weekStartDate === currentWeekStart 
         ? prev.weeklyAnalysisCount + 1 
