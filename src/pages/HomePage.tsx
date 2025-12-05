@@ -8,7 +8,7 @@ import { ArrowRight, Sparkles, Target, TrendingUp } from "lucide-react";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { userData } = useApp();
+  const { userData, isLoggedIn } = useApp();
 
   const features = [
     { icon: Target, label: "Análise Facial", desc: "IA analisa seu rosto" },
@@ -53,7 +53,15 @@ export default function HomePage() {
           variant="neon"
           size="xl"
           className="w-full mb-8"
-          onClick={() => navigate(userData.scores ? "/analysis" : "/onboarding")}
+          onClick={() => {
+            if (userData.scores) {
+              navigate("/analysis");
+            } else if (isLoggedIn) {
+              navigate("/onboarding");
+            } else {
+              navigate("/login");
+            }
+          }}
         >
           {userData.scores ? "Ver Minha Análise" : "Começar"}
           <ArrowRight className="w-5 h-5" />
