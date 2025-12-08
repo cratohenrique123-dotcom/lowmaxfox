@@ -144,24 +144,28 @@ export default function AnalysisPage() {
   const location = useLocation();
   const { userData, setScores, recordAnalysis, canAnalyze, getRemainingAnalyses } = useApp();
   const isNewAnalysis = location.state?.newAnalysis;
-  const [analyzing, setAnalyzing] = useState(isNewAnalysis && !userData.scores);
-  const [showScores, setShowScores] = useState(!!userData.scores && !isNewAnalysis);
+  const [analyzing, setAnalyzing] = useState(false);
   const [showCongrats, setShowCongrats] = useState(false);
+  const [analysisProcessed, setAnalysisProcessed] = useState(false);
 
   useEffect(() => {
-    if (isNewAnalysis) {
+    // Only run analysis when coming from photo upload with newAnalysis flag
+    // and we haven't processed this navigation yet
+    if (isNewAnalysis && !analysisProcessed) {
       setAnalyzing(true);
+      setAnalysisProcessed(true);
       const timer = setTimeout(() => {
         const newScores = generateExpertAnalysis(userData.goal);
         setScores(newScores);
         recordAnalysis();
         setAnalyzing(false);
-        setShowScores(true);
         setShowCongrats(true);
+        // Clear the navigation state to prevent re-analysis on page refresh
+        window.history.replaceState({}, document.title);
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [isNewAnalysis]);
+  }, [isNewAnalysis, analysisProcessed]);
 
   const scores = userData.scores;
   const canDoNewAnalysis = canAnalyze();
