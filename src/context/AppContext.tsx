@@ -47,6 +47,7 @@ interface AppContextType {
   canAnalyze: () => boolean;
   recordAnalysis: () => void;
   getRemainingAnalyses: () => number;
+  resetPhotos: () => void;
 }
 
 const defaultUserData: UserData = {
@@ -136,6 +137,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  const resetPhotos = () => {
+    setUserData((prev) => ({
+      ...prev,
+      photos: {
+        front: null,
+        leftProfile: null,
+        rightProfile: null,
+      },
+    }));
+  };
+
   const canAnalyze = (): boolean => {
     const recentAnalyses = getAnalysesInLast7Days(userData.analysisHistory);
     return recentAnalyses < 3;
@@ -170,6 +182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         canAnalyze,
         recordAnalysis,
         getRemainingAnalyses,
+        resetPhotos,
       }}
     >
       {children}
