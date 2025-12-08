@@ -142,7 +142,7 @@ function generateExpertAnalysis(goal: string) {
 export default function AnalysisPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userData, setScores, recordAnalysis, canAnalyze, getRemainingAnalyses } = useApp();
+  const { userData, setScores, recordAnalysis, canAnalyze, getRemainingAnalyses, resetPhotos } = useApp();
   const isNewAnalysis = location.state?.newAnalysis;
   const [analyzing, setAnalyzing] = useState(!!isNewAnalysis);
   const [showCongrats, setShowCongrats] = useState(false);
@@ -178,7 +178,9 @@ export default function AnalysisPage() {
       });
       return;
     }
-    navigate("/photo-upload");
+    // Reset photos and states before navigating to upload
+    resetPhotos();
+    navigate("/upload");
   };
 
   if (analyzing) {
