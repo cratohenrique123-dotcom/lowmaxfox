@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -144,16 +144,16 @@ export default function AnalysisPage() {
   const location = useLocation();
   const { userData, setScores, recordAnalysis, canAnalyze, getRemainingAnalyses } = useApp();
   const isNewAnalysis = location.state?.newAnalysis;
-  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(!!isNewAnalysis);
   const [showCongrats, setShowCongrats] = useState(false);
-  const [analysisProcessed, setAnalysisProcessed] = useState(false);
+  const hasRunRef = React.useRef(false);
 
   useEffect(() => {
     // Only run analysis when coming from photo upload with newAnalysis flag
-    // and we haven't processed this navigation yet
-    if (isNewAnalysis && !analysisProcessed) {
+    if (isNewAnalysis && !hasRunRef.current) {
+      hasRunRef.current = true;
       setAnalyzing(true);
-      setAnalysisProcessed(true);
+      
       const timer = setTimeout(() => {
         const newScores = generateExpertAnalysis(userData.goal);
         setScores(newScores);
@@ -163,9 +163,10 @@ export default function AnalysisPage() {
         // Clear the navigation state to prevent re-analysis on page refresh
         window.history.replaceState({}, document.title);
       }, 3000);
+      
       return () => clearTimeout(timer);
     }
-  }, [isNewAnalysis, analysisProcessed]);
+  }, []);
 
   const scores = userData.scores;
   const canDoNewAnalysis = canAnalyze();
