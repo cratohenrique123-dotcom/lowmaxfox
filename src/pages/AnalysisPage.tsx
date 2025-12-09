@@ -427,17 +427,22 @@ export default function AnalysisPage() {
           <ChevronRight className="w-5 h-5" />
         </Button>
 
-        {/* New Analysis Button - only if can analyze */}
-        {canDoNewAnalysis && (
-          <Button
-            variant="neonOutline"
-            size="lg"
-            className="w-full"
-            onClick={handleNewAnalysis}
-          >
-            <Camera className="w-5 h-5" />
-            Fazer nova análise
-          </Button>
+        {/* New Analysis Button - always visible */}
+        <Button
+          variant="neonOutline"
+          size="lg"
+          className="w-full"
+          onClick={handleNewAnalysis}
+          disabled={!canDoNewAnalysis}
+        >
+          <Camera className="w-5 h-5" />
+          Fazer nova análise
+        </Button>
+        
+        {!canDoNewAnalysis && (
+          <p className="text-center text-sm text-yellow-500">
+            ⚠️ Você já atingiu o limite de 3 análises nesta semana. Tente novamente daqui alguns dias.
+          </p>
         )}
       </div>
 
