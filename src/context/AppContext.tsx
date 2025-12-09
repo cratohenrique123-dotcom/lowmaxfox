@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
+// ========================================
+// LIMITE DE ANÁLISES SEMANAIS
+// Altere este valor para ajustar o limite
+// Produção: 3 | Teste: 10
+// ========================================
+const WEEKLY_ANALYSIS_LIMIT = 10;
+
 interface AnalysisResult {
   overall: number;
   potential: number;
@@ -150,12 +157,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const canAnalyze = (): boolean => {
     const recentAnalyses = getAnalysesInLast7Days(userData.analysisHistory);
-    return recentAnalyses < 3;
+    return recentAnalyses < WEEKLY_ANALYSIS_LIMIT;
   };
 
   const getRemainingAnalyses = (): number => {
     const recentAnalyses = getAnalysesInLast7Days(userData.analysisHistory);
-    return Math.max(0, 3 - recentAnalyses);
+    return Math.max(0, WEEKLY_ANALYSIS_LIMIT - recentAnalyses);
   };
 
   const recordAnalysis = () => {
