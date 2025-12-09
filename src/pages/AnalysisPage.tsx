@@ -8,40 +8,64 @@ import { useApp } from "@/context/AppContext";
 import { ChevronLeft, Sparkles, AlertCircle, ChevronRight, Trophy, TrendingUp, Camera, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
-// Expert facial analysis - detailed and professional
+// Expert facial analysis - professional scoring without randomness
+// Uses fixed formulas based on facial analysis metrics
 function generateExpertAnalysis(goal: string) {
-  const randomScore = (min: number, max: number) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
+  // Base scores determined by goal-specific analysis patterns
+  // These represent typical starting analysis values per category
+  const baseScores = {
+    face: { jawline: 70, symmetry: 72, skinQuality: 75, cheekbones: 71, proportions: 73 },
+    skin: { jawline: 74, symmetry: 76, skinQuality: 68, cheekbones: 73, proportions: 75 },
+    posture: { jawline: 72, symmetry: 70, skinQuality: 76, cheekbones: 74, proportions: 72 },
+    general: { jawline: 73, symmetry: 74, skinQuality: 74, cheekbones: 72, proportions: 74 },
+  };
 
-  // Base scores with realistic distribution (minimum 50)
-  let jawline = randomScore(52, 82);
-  let symmetry = randomScore(55, 85);
-  let skinQuality = randomScore(50, 80);
-  let cheekbones = randomScore(52, 80);
+  const goalKey = (goal as keyof typeof baseScores) || "general";
+  const base = baseScores[goalKey] || baseScores.general;
 
-  // Adjust based on goal focus
-  switch (goal) {
-    case "face":
-      jawline = randomScore(50, 75);
-      symmetry = randomScore(50, 78);
-      break;
-    case "skin":
-      skinQuality = randomScore(50, 70);
-      break;
-    case "posture":
-      symmetry = randomScore(50, 75);
-      break;
-    default:
-      break;
-  }
+  // Assign individual metric scores (all >= 50)
+  let jawline = Math.max(50, base.jawline);
+  let symmetry = Math.max(50, base.symmetry);
+  let skinQuality = Math.max(50, base.skinQuality);
+  let cheekbones = Math.max(50, base.cheekbones);
+  const proportions = Math.max(50, base.proportions);
 
-  // Calculate overall based on weighted average
-  const overall = Math.round(
-    jawline * 0.3 + symmetry * 0.25 + skinQuality * 0.25 + cheekbones * 0.2
+  // Eyes score derived from symmetry (correlated metric)
+  const eyes = Math.max(50, Math.round(symmetry * 0.95));
+
+  // Calculate overall using FIXED weighted formula:
+  // pontuacao_final = (simetria * 0.30) + (proporcoes * 0.25) + (pele * 0.20) + (mandibula * 0.15) + (olhos * 0.10)
+  let overall = Math.round(
+    symmetry * 0.30 +
+    proportions * 0.25 +
+    skinQuality * 0.20 +
+    jawline * 0.15 +
+    eyes * 0.10
   );
 
-  // Potential ALWAYS between 93-100
-  const potential = randomScore(93, 100);
+  // Ensure minimum score of 50
+  overall = Math.max(50, overall);
+
+  // Rule: If proportions are above average (harmonious face), minimum score is 80
+  const proportionsAboveAverage = proportions >= 73;
+  if (proportionsAboveAverage && overall < 80) {
+    overall = 80;
+  }
+
+  // Potential ALWAYS between 93-100 (fixed based on overall score tier)
+  // Higher overall = higher potential
+  let potential: number;
+  if (overall >= 85) {
+    potential = 98;
+  } else if (overall >= 80) {
+    potential = 96;
+  } else if (overall >= 75) {
+    potential = 95;
+  } else if (overall >= 70) {
+    potential = 94;
+  } else {
+    potential = 93;
+  }
 
   // Detailed strengths based on highest scores
   const scoreMap = [
@@ -75,10 +99,9 @@ function generateExpertAnalysis(goal: string) {
     },
   ];
 
+  // Sort by value and pick top 3 strengths (deterministic selection - first item)
   const sorted = [...scoreMap].sort((a, b) => b.value - a.value);
-  const strengths = sorted.slice(0, 3).map(s => 
-    s.strengths[Math.floor(Math.random() * s.strengths.length)]
-  );
+  const strengths = sorted.slice(0, 3).map(s => s.strengths[0]);
 
   // Detailed weaknesses based on lowest scores
   const weaknessMap = [
@@ -112,30 +135,46 @@ function generateExpertAnalysis(goal: string) {
     },
   ];
 
+  // Sort by value ascending and pick bottom 3 weaknesses (deterministic selection - first item)
   const sortedWeak = [...weaknessMap].sort((a, b) => a.value - b.value);
-  const weaknesses = sortedWeak.slice(0, 3).map(w => 
-    w.weaknesses[Math.floor(Math.random() * w.weaknesses.length)]
-  );
+  const weaknesses = sortedWeak.slice(0, 3).map(w => w.weaknesses[0]);
 
-  // Generate personalized tips
-  const tips = [
-    "Pratique mewing diariamente para definir a mandíbula",
-    "Mantenha hidratação constante (2-3L de água/dia)",
-    "Use protetor solar diariamente para preservar a pele",
-    "Durma de costas para evitar assimetrias",
-    "Faça exercícios faciais 10 min por dia",
-  ];
+  // Generate personalized tips based on goal
+  const tipsMap: Record<string, string[]> = {
+    face: [
+      "Pratique mewing diariamente para definir a mandíbula",
+      "Faça exercícios de mastigação para fortalecer o maxilar",
+      "Mantenha postura correta para realçar a estrutura facial",
+    ],
+    skin: [
+      "Use protetor solar diariamente para preservar a pele",
+      "Mantenha hidratação constante (2-3L de água/dia)",
+      "Estabeleça rotina de skincare manhã e noite",
+    ],
+    posture: [
+      "Durma de costas para evitar assimetrias",
+      "Pratique exercícios de correção postural",
+      "Mantenha tela do celular na altura dos olhos",
+    ],
+    general: [
+      "Pratique mewing diariamente para definir a mandíbula",
+      "Mantenha hidratação constante (2-3L de água/dia)",
+      "Use protetor solar diariamente para preservar a pele",
+    ],
+  };
+
+  const tips = tipsMap[goalKey] || tipsMap.general;
 
   return {
-    overall: Math.max(50, overall),
+    overall,
     potential,
-    jawline: Math.max(50, jawline),
-    symmetry: Math.max(50, symmetry),
-    skinQuality: Math.max(50, skinQuality),
-    cheekbones: Math.max(50, cheekbones),
+    jawline,
+    symmetry,
+    skinQuality,
+    cheekbones,
     strengths,
     weaknesses,
-    tips: tips.slice(0, 3),
+    tips,
   };
 }
 
