@@ -107,7 +107,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    localStorage.setItem("lowmax_userData", JSON.stringify(userData));
+    // Não salvar fotos no localStorage (são muito grandes e excedem a quota)
+    const dataToSave = {
+      ...userData,
+      photos: {
+        front: null,
+        leftProfile: null,
+        rightProfile: null,
+      },
+      evolution: userData.evolution.map(e => ({
+        ...e,
+        before: null,
+        after: null,
+      })),
+    };
+    try {
+      localStorage.setItem("lowmax_userData", JSON.stringify(dataToSave));
+    } catch (e) {
+      console.warn("Could not save to localStorage:", e);
+    }
   }, [userData]);
 
   useEffect(() => {
