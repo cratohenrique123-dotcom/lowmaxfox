@@ -8,15 +8,16 @@ import { useApp } from "@/context/AppContext";
 import { ChevronLeft, Sparkles, AlertCircle, ChevronRight, Trophy, TrendingUp, Camera, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
-// Expert facial analysis - sistema avançado de análise facial
-// Avalia: Pele, Mandíbula, Maçãs do rosto, Simetria facial (0-100, mínimo 30)
+// Expert facial analysis - sistema avançado de análise facial VERSÃO 3.0
+// Avalia: Pele, Mandíbula, Maçãs do rosto, Simetria facial (30-100)
+// Nota geral baseada em HARMONIA TOTAL (não média matemática)
 function generateExpertAnalysis(goal: string) {
   // Base scores por objetivo - representam padrões típicos de análise
   const baseScores = {
-    face: { skin: 72, jawline: 75, cheekbones: 73, symmetry: 74 },
-    skin: { skin: 68, jawline: 72, cheekbones: 71, symmetry: 73 },
-    posture: { skin: 74, jawline: 70, cheekbones: 72, symmetry: 71 },
-    general: { skin: 73, jawline: 73, cheekbones: 72, symmetry: 73 },
+    face: { skin: 78, jawline: 82, cheekbones: 80, symmetry: 81 },
+    skin: { skin: 74, jawline: 78, cheekbones: 77, symmetry: 79 },
+    posture: { skin: 80, jawline: 76, cheekbones: 78, symmetry: 77 },
+    general: { skin: 79, jawline: 79, cheekbones: 78, symmetry: 80 },
   };
 
   const goalKey = (goal as keyof typeof baseScores) || "general";
@@ -28,55 +29,48 @@ function generateExpertAnalysis(goal: string) {
   let cheekbones = Math.max(30, base.cheekbones);
   let symmetry = Math.max(30, base.symmetry);
 
-  // Detectar se é um rosto de padrão estético alto (modelo/celebridade)
-  // Baseado na média dos scores base
-  const avgBaseScore = (skin + jawline + cheekbones + symmetry) / 4;
-  const isHighAestheticPattern = avgBaseScore >= 73; // Acima da média = padrão alto
+  // Calcular média para determinar nível estético
+  const avgScore = (skin + jawline + cheekbones + symmetry) / 4;
+
+  // NOTA GERAL baseada em HARMONIA TOTAL (não média matemática)
+  // Escala:
+  // 70-80: aparência comum
+  // 81-88: acima da média
+  // 89-94: muito bonito
+  // 95-100: beleza excepcional (modelos como Chico Lachowski, Jordan Barrett)
   
-  // Se for padrão estético alto, garantir mínimo de 85 em todos os itens
-  if (isHighAestheticPattern) {
-    skin = Math.max(85, skin);
-    jawline = Math.max(85, jawline);
-    cheekbones = Math.max(85, cheekbones);
-    symmetry = Math.max(85, symmetry);
-  }
-
-  // Calcular média dos 4 itens
-  const averageScore = (skin + jawline + cheekbones + symmetry) / 4;
-
-  // Aplicar AJUSTE DE BELEZA
-  // - Padrão estético alto (modelo/celebridade): +10 a +18
-  // - Pessoa comum bonita: +5 a +10
-  // - Pessoa comum média: +0 a +4
-  let beautyBonus = 0;
-  if (isHighAestheticPattern) {
-    beautyBonus = 14; // +10 a +18 range, usando 14 como valor médio
-  } else if (avgBaseScore >= 70) {
-    beautyBonus = 7; // +5 a +10 range, usando 7 como valor médio
+  let overall: number;
+  
+  if (avgScore >= 85) {
+    // Padrão modelo/excepcional → 95-100
+    overall = Math.round(95 + (avgScore - 85) * 0.33);
+    overall = Math.min(100, overall);
+  } else if (avgScore >= 80) {
+    // Muito bonito → 89-94
+    overall = Math.round(89 + (avgScore - 80) * 1);
+  } else if (avgScore >= 75) {
+    // Acima da média → 81-88
+    overall = Math.round(81 + (avgScore - 75) * 1.4);
   } else {
-    beautyBonus = 2; // +0 a +4 range, usando 2 como valor médio
+    // Aparência comum → 70-80
+    overall = Math.round(70 + (avgScore - 65) * 1);
   }
-
-  // Nota geral = média + ajuste de beleza
-  let overall = Math.round(averageScore + beautyBonus);
-
-  // Garantir mínimo de 30
-  overall = Math.max(30, overall);
+  
+  // Garantir mínimo de 30 e máximo de 100
+  overall = Math.max(30, Math.min(100, overall));
 
   // POTENCIAL (sempre entre 91 e 100)
   // - Quem já é muito bonito: 91-95
   // - Quem tem espaço para evoluir: 96-100
   let potential: number;
-  if (overall >= 90) {
-    potential = 91; // Já muito bonito, menos espaço para evoluir
-  } else if (overall >= 85) {
-    potential = 93;
-  } else if (overall >= 80) {
-    potential = 95;
-  } else if (overall >= 70) {
-    potential = 97;
+  if (overall >= 95) {
+    potential = 91; // Beleza excepcional, pouco espaço
+  } else if (overall >= 89) {
+    potential = 93; // Muito bonito
+  } else if (overall >= 81) {
+    potential = 96; // Acima da média
   } else {
-    potential = 100; // Maior espaço para evolução
+    potential = 99; // Maior espaço para evolução
   }
 
   // Pontos fortes baseados nos maiores scores
