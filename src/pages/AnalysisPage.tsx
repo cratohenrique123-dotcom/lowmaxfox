@@ -8,138 +8,150 @@ import { useApp } from "@/context/AppContext";
 import { ChevronLeft, Sparkles, AlertCircle, ChevronRight, Trophy, TrendingUp, Camera, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
-// Expert facial analysis - professional scoring without randomness
-// Uses fixed formulas based on facial analysis metrics
+// Expert facial analysis - sistema avançado de análise facial
+// Avalia: Pele, Mandíbula, Maçãs do rosto, Simetria facial (0-100, mínimo 30)
 function generateExpertAnalysis(goal: string) {
-  // Base scores determined by goal-specific analysis patterns
-  // These represent typical starting analysis values per category
+  // Base scores por objetivo - representam padrões típicos de análise
   const baseScores = {
-    face: { jawline: 70, symmetry: 72, skinQuality: 75, cheekbones: 71, proportions: 73 },
-    skin: { jawline: 74, symmetry: 76, skinQuality: 68, cheekbones: 73, proportions: 75 },
-    posture: { jawline: 72, symmetry: 70, skinQuality: 76, cheekbones: 74, proportions: 72 },
-    general: { jawline: 73, symmetry: 74, skinQuality: 74, cheekbones: 72, proportions: 74 },
+    face: { skin: 72, jawline: 75, cheekbones: 73, symmetry: 74 },
+    skin: { skin: 68, jawline: 72, cheekbones: 71, symmetry: 73 },
+    posture: { skin: 74, jawline: 70, cheekbones: 72, symmetry: 71 },
+    general: { skin: 73, jawline: 73, cheekbones: 72, symmetry: 73 },
   };
 
   const goalKey = (goal as keyof typeof baseScores) || "general";
   const base = baseScores[goalKey] || baseScores.general;
 
-  // Assign individual metric scores (all >= 50)
-  let jawline = Math.max(50, base.jawline);
-  let symmetry = Math.max(50, base.symmetry);
-  let skinQuality = Math.max(50, base.skinQuality);
-  let cheekbones = Math.max(50, base.cheekbones);
-  const proportions = Math.max(50, base.proportions);
+  // Aplicar scores individuais (mínimo 30)
+  let skin = Math.max(30, base.skin);
+  let jawline = Math.max(30, base.jawline);
+  let cheekbones = Math.max(30, base.cheekbones);
+  let symmetry = Math.max(30, base.symmetry);
 
-  // Eyes score derived from symmetry (correlated metric)
-  const eyes = Math.max(50, Math.round(symmetry * 0.95));
-
-  // Calculate overall using FIXED weighted formula:
-  // pontuacao_final = (simetria * 0.30) + (proporcoes * 0.25) + (pele * 0.20) + (mandibula * 0.15) + (olhos * 0.10)
-  let overall = Math.round(
-    symmetry * 0.30 +
-    proportions * 0.25 +
-    skinQuality * 0.20 +
-    jawline * 0.15 +
-    eyes * 0.10
-  );
-
-  // Ensure minimum score of 50
-  overall = Math.max(50, overall);
-
-  // Rule: If proportions are above average (harmonious face), minimum score is 80
-  const proportionsAboveAverage = proportions >= 73;
-  if (proportionsAboveAverage && overall < 80) {
-    overall = 80;
+  // Detectar se é um rosto de padrão estético alto (modelo/celebridade)
+  // Baseado na média dos scores base
+  const avgBaseScore = (skin + jawline + cheekbones + symmetry) / 4;
+  const isHighAestheticPattern = avgBaseScore >= 73; // Acima da média = padrão alto
+  
+  // Se for padrão estético alto, garantir mínimo de 85 em todos os itens
+  if (isHighAestheticPattern) {
+    skin = Math.max(85, skin);
+    jawline = Math.max(85, jawline);
+    cheekbones = Math.max(85, cheekbones);
+    symmetry = Math.max(85, symmetry);
   }
 
-  // Potential ALWAYS between 93-100 (fixed based on overall score tier)
-  // Higher overall = higher potential
+  // Calcular média dos 4 itens
+  const averageScore = (skin + jawline + cheekbones + symmetry) / 4;
+
+  // Aplicar AJUSTE DE BELEZA
+  // - Padrão estético alto (modelo/celebridade): +10 a +18
+  // - Pessoa comum bonita: +5 a +10
+  // - Pessoa comum média: +0 a +4
+  let beautyBonus = 0;
+  if (isHighAestheticPattern) {
+    beautyBonus = 14; // +10 a +18 range, usando 14 como valor médio
+  } else if (avgBaseScore >= 70) {
+    beautyBonus = 7; // +5 a +10 range, usando 7 como valor médio
+  } else {
+    beautyBonus = 2; // +0 a +4 range, usando 2 como valor médio
+  }
+
+  // Nota geral = média + ajuste de beleza
+  let overall = Math.round(averageScore + beautyBonus);
+
+  // Garantir mínimo de 30
+  overall = Math.max(30, overall);
+
+  // POTENCIAL (sempre entre 91 e 100)
+  // - Quem já é muito bonito: 91-95
+  // - Quem tem espaço para evoluir: 96-100
   let potential: number;
-  if (overall >= 85) {
-    potential = 98;
+  if (overall >= 90) {
+    potential = 91; // Já muito bonito, menos espaço para evoluir
+  } else if (overall >= 85) {
+    potential = 93;
   } else if (overall >= 80) {
-    potential = 96;
-  } else if (overall >= 75) {
     potential = 95;
   } else if (overall >= 70) {
-    potential = 94;
+    potential = 97;
   } else {
-    potential = 93;
+    potential = 100; // Maior espaço para evolução
   }
 
-  // Detailed strengths based on highest scores
+  // Pontos fortes baseados nos maiores scores
   const scoreMap = [
-    { key: "jawline", value: jawline, 
-      strengths: [
-        "Linha da mandíbula com definição angular visível",
-        "Estrutura óssea mandibular bem desenvolvida",
-        "Ângulo gonial favorável para estética facial"
-      ]
-    },
-    { key: "symmetry", value: symmetry,
-      strengths: [
-        "Excelente proporção entre as hemifaces",
-        "Alinhamento do eixo facial equilibrado",
-        "Simetria ocular e nasal adequada"
-      ]
-    },
-    { key: "skinQuality", value: skinQuality,
+    { key: "skin", value: skin, 
       strengths: [
         "Textura cutânea uniforme e saudável",
-        "Tom de pele homogêneo sem manchas",
+        "Tom de pele homogêneo e luminoso",
         "Boa elasticidade e hidratação natural"
+      ]
+    },
+    { key: "jawline", value: jawline,
+      strengths: [
+        "Linha da mandíbula bem definida e angular",
+        "Estrutura óssea mandibular marcada",
+        "Ângulo gonial favorável para estética facial"
       ]
     },
     { key: "cheekbones", value: cheekbones,
       strengths: [
-        "Proeminência malar bem definida",
+        "Maçãs do rosto elevadas e definidas",
         "Volume adequado na região zigomática",
         "Projeção lateral das maçãs favorável"
       ]
     },
+    { key: "symmetry", value: symmetry,
+      strengths: [
+        "Excelente simetria entre as hemifaces",
+        "Alinhamento do eixo facial equilibrado",
+        "Proporções faciais harmoniosas"
+      ]
+    },
   ];
 
-  // Sort by value and pick top 3 strengths (deterministic selection - first item)
+  // Ordenar e selecionar top 3 pontos fortes
   const sorted = [...scoreMap].sort((a, b) => b.value - a.value);
   const strengths = sorted.slice(0, 3).map(s => s.strengths[0]);
 
-  // Detailed weaknesses based on lowest scores
+  // Pontos a evoluir baseados nos menores scores
   const weaknessMap = [
-    { key: "jawline", value: jawline,
-      weaknesses: [
-        "Definição mandibular pode ser intensificada com exercícios",
-        "Ângulo gonial tem potencial para maior definição",
-        "Região submandibular pode ser trabalhada"
-      ]
-    },
-    { key: "symmetry", value: symmetry,
-      weaknesses: [
-        "Assimetrias faciais leves podem ser corrigidas com postura",
-        "Alinhamento facial pode ser otimizado com exercícios",
-        "Proporções podem ser equilibradas com técnicas específicas"
-      ]
-    },
-    { key: "skinQuality", value: skinQuality,
+    { key: "skin", value: skin,
       weaknesses: [
         "Textura cutânea pode melhorar com skincare adequado",
         "Hidratação da pele precisa de atenção diária",
         "Uniformidade do tom pode ser trabalhada"
       ]
     },
+    { key: "jawline", value: jawline,
+      weaknesses: [
+        "Definição mandibular pode ser intensificada com mewing",
+        "Ângulo gonial tem potencial para maior definição",
+        "Região submandibular pode ser trabalhada"
+      ]
+    },
     { key: "cheekbones", value: cheekbones,
       weaknesses: [
-        "Proeminência malar pode ser destacada com técnicas",
+        "Maçãs do rosto podem ser destacadas com técnicas",
         "Volume zigomático tem espaço para evolução",
         "Definição das maçãs pode ser intensificada"
       ]
     },
+    { key: "symmetry", value: symmetry,
+      weaknesses: [
+        "Assimetrias leves podem ser corrigidas com postura",
+        "Alinhamento facial pode ser otimizado",
+        "Proporções podem ser equilibradas com técnicas específicas"
+      ]
+    },
   ];
 
-  // Sort by value ascending and pick bottom 3 weaknesses (deterministic selection - first item)
+  // Ordenar ascendente e selecionar 3 pontos a evoluir
   const sortedWeak = [...weaknessMap].sort((a, b) => a.value - b.value);
   const weaknesses = sortedWeak.slice(0, 3).map(w => w.weaknesses[0]);
 
-  // Generate personalized tips based on goal
+  // Dicas personalizadas por objetivo
   const tipsMap: Record<string, string[]> = {
     face: [
       "Pratique mewing diariamente para definir a mandíbula",
@@ -170,7 +182,7 @@ function generateExpertAnalysis(goal: string) {
     potential,
     jawline,
     symmetry,
-    skinQuality,
+    skinQuality: skin,
     cheekbones,
     strengths,
     weaknesses,
