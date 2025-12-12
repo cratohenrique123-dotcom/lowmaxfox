@@ -194,7 +194,8 @@ export default function AnalysisPage() {
   const hasRunRef = React.useRef(false);
 
   useEffect(() => {
-    // Only run analysis when coming from photo upload with newAnalysis flag
+    // ONLY run analysis when coming from photo upload with newAnalysis flag
+    // AND when we don't already have scores OR explicitly requested new analysis
     if (isNewAnalysis && !hasRunRef.current) {
       hasRunRef.current = true;
       setAnalyzing(true);
@@ -210,8 +211,11 @@ export default function AnalysisPage() {
       }, 3000);
       
       return () => clearTimeout(timer);
+    } else if (!isNewAnalysis) {
+      // If not a new analysis, ensure we're not in analyzing state
+      setAnalyzing(false);
     }
-  }, []);
+  }, [isNewAnalysis]);
 
   const scores = userData.scores;
   const canDoNewAnalysis = canAnalyze();
