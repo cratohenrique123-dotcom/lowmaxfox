@@ -9,42 +9,55 @@ import { toast } from "sonner";
 
 type PhotoType = "front" | "leftProfile" | "rightProfile";
 
-const photoTypes: { type: PhotoType; label: string; icon: string }[] = [
-  { type: "front", label: "Frente", icon: "😐" },
-  { type: "leftProfile", label: "Perfil Esquerdo", icon: "👤" },
-  { type: "rightProfile", label: "Perfil Direito", icon: "👤" },
+const photoTypes: { type: PhotoType; label: string }[] = [
+  { type: "front", label: "Frente" },
+  { type: "leftProfile", label: "Perfil Esquerdo" },
+  { type: "rightProfile", label: "Perfil Direito" },
 ];
 
 export default function PhotoUploadPage() {
   const navigate = useNavigate();
   const { userData, setUserPhoto, canAnalyze } = useApp();
   const [loading, setLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeType, setActiveType] = useState<PhotoType>("front");
+  const [pendingType, setPendingType] = useState<PhotoType | null>(null);
+  
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !pendingType) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
-      setUserPhoto(activeType, result);
-      toast.success(`Foto ${photoTypes.find(p => p.type === activeType)?.label} carregada!`);
+      if (result) {
+        setUserPhoto(pendingType, result);
+        toast.success(`Foto ${photoTypes.find(p => p.type === pendingType)?.label} carregada!`);
+      }
+      setPendingType(null);
+    };
+    reader.onerror = () => {
+      toast.error("Erro ao carregar a foto");
+      setPendingType(null);
     };
     reader.readAsDataURL(file);
     
-    // Reset input
+    // Reset input para permitir selecionar a mesma foto novamente
     e.target.value = "";
   };
 
-  const handleCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
-      fileInputRef.current?.click();
-    } catch {
-      fileInputRef.current?.click();
+  const openCamera = (type: PhotoType) => {
+    setPendingType(type);
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
+  };
+
+  const openGallery = (type: PhotoType) => {
+    setPendingType(type);
+    if (galleryInputRef.current) {
+      galleryInputRef.current.click();
     }
   };
 
@@ -69,18 +82,37 @@ export default function PhotoUploadPage() {
     }
   };
 
+  const getPhotoCount = () => {
+    let count = 0;
+    if (userData.photos.front) count++;
+    if (userData.photos.leftProfile) count++;
+    if (userData.photos.rightProfile) count++;
+    return count;
+  };
+
   return (
-    <div className="min-h-screen bg-background px-6 py-8">
+    <div className="min-h-screen bg-background px-4 py-6">
+      {/* Input para câmera - capture="environment" para usar câmera traseira, ou "user" para frontal */}
       <input
         type="file"
-        ref={fileInputRef}
+        ref={cameraInputRef}
+        className="hidden"
+        accept="image/*"
+        capture="user"
+        onChange={handleFileSelect}
+      />
+      
+      {/* Input para galeria - sem capture para abrir galeria */}
+      <input
+        type="file"
+        ref={galleryInputRef}
         className="hidden"
         accept="image/*"
         onChange={handleFileSelect}
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <button onClick={() => navigate(-1)} className="p-2 -ml-2">
           <ChevronLeft className="w-6 h-6" />
         </button>
@@ -89,7 +121,7 @@ export default function PhotoUploadPage() {
       </div>
 
       {/* Progress */}
-      <div className="flex gap-2 mb-8">
+      <div className="flex gap-2 mb-6">
         <div className="h-1 flex-1 bg-primary rounded-full" />
         <div className="h-1 flex-1 bg-primary rounded-full" />
         <div className="h-1 flex-1 bg-border rounded-full" />
@@ -97,13 +129,13 @@ export default function PhotoUploadPage() {
 
       {/* Status Message */}
       {canProceed ? (
-        <Card className="p-4 mb-6 border-green-500/30 bg-green-500/10">
+        <Card className="p-3 mb-4 border-green-500/30 bg-green-500/10">
           <p className="text-sm text-green-400 text-center font-medium">
             ✓ Análise disponível. Envie suas fotos.
           </p>
         </Card>
       ) : (
-        <Card className="p-4 mb-6 border-orange-500/30 bg-orange-500/10">
+        <Card className="p-3 mb-4 border-orange-500/30 bg-orange-500/10">
           <p className="text-sm text-orange-400 text-center font-medium">
             ⚠️ Limite semanal atingido. Tente novamente nos próximos dias.
           </p>
@@ -111,75 +143,76 @@ export default function PhotoUploadPage() {
       )}
 
       {/* Title */}
-      <div className="text-center mb-6 animate-fade-in">
-        <h1 className="text-2xl font-bold mb-2">Envie suas fotos</h1>
+      <div className="text-center mb-4 animate-fade-in">
+        <h1 className="text-xl font-bold mb-1">Envie suas fotos</h1>
         <p className="text-muted-foreground text-sm">
-          3 fotos para uma análise completa
+          {getPhotoCount()}/3 fotos enviadas
         </p>
       </div>
 
-      {/* Photo Grid */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      {/* Photo Cards - Cada card tem botões diretos */}
+      <div className="space-y-3 mb-6">
         {photoTypes.map((photo) => {
           const hasPhoto = userData.photos[photo.type];
-          const isActive = activeType === photo.type;
           return (
             <Card
               key={photo.type}
-              variant={isActive ? "neon" : "default"}
-              className={`aspect-square flex flex-col items-center justify-center cursor-pointer transition-all duration-300 overflow-hidden ${
-                isActive ? "scale-105" : ""
+              className={`p-3 transition-all duration-300 ${
+                hasPhoto ? "border-green-500/50 bg-green-500/5" : ""
               }`}
-              onClick={() => setActiveType(photo.type)}
             >
-              {hasPhoto ? (
-                <div className="relative w-full h-full">
-                  <img
-                    src={userData.photos[photo.type]!}
-                    alt={photo.label}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-1 right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                    <Check className="w-3 h-3 text-white" />
+              <div className="flex items-center gap-3">
+                {/* Preview da foto ou placeholder */}
+                <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                  {hasPhoto ? (
+                    <img
+                      src={userData.photos[photo.type]!}
+                      alt={photo.label}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-8 h-8 text-muted-foreground" />
+                  )}
+                </div>
+
+                {/* Info e botões */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-medium text-sm">{photo.label}</span>
+                    {hasPhoto && (
+                      <Check className="w-4 h-4 text-green-500" />
+                    )}
+                  </div>
+                  
+                  {/* Botões de ação diretos */}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-8 text-xs"
+                      onClick={() => openCamera(photo.type)}
+                    >
+                      <Camera className="w-3 h-3 mr-1" />
+                      Câmera
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-8 text-xs"
+                      onClick={() => openGallery(photo.type)}
+                    >
+                      <Upload className="w-3 h-3 mr-1" />
+                      Galeria
+                    </Button>
                   </div>
                 </div>
-              ) : (
-                <>
-                  <User className="w-8 h-8 text-muted-foreground mb-1" />
-                  <span className="text-xs text-muted-foreground">{photo.label}</span>
-                </>
-              )}
+              </div>
             </Card>
           );
         })}
       </div>
 
-      {/* Upload Section */}
-      <Card variant="glass" className="p-6 mb-6">
-        <h3 className="font-semibold mb-4 text-center">
-          {photoTypes.find(p => p.type === activeType)?.label}
-        </h3>
-        <div className="flex gap-3">
-          <Button
-            variant="neonOutline"
-            className="flex-1"
-            onClick={handleCamera}
-          >
-            <Camera className="w-5 h-5" />
-            Câmera
-          </Button>
-          <Button
-            variant="neonOutline"
-            className="flex-1"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="w-5 h-5" />
-            Galeria
-          </Button>
-        </div>
-      </Card>
-
-      {/* Status */}
+      {/* Status dots */}
       <div className="flex justify-center gap-2 mb-6">
         {photoTypes.map((photo) => (
           <div
@@ -196,7 +229,7 @@ export default function PhotoUploadPage() {
         variant="neon"
         size="lg"
         className="w-full"
-        disabled={!allPhotosUploaded || loading}
+        disabled={!allPhotosUploaded || loading || !canProceed}
         onClick={handleAnalyze}
       >
         {loading ? (
