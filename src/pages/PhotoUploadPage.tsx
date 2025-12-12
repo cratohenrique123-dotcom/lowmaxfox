@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useApp } from "@/context/AppContext";
-import { Camera, Upload, Check, User, ChevronLeft } from "lucide-react";
+import { Camera, Upload, Check, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 
 type PhotoType = "front" | "leftProfile" | "rightProfile";
@@ -150,20 +150,25 @@ export default function PhotoUploadPage() {
         </p>
       </div>
 
-      {/* Photo Cards - Cada card tem botões diretos */}
+      {/* Photo Cards - Toque para abrir câmera diretamente */}
       <div className="space-y-3 mb-6">
         {photoTypes.map((photo) => {
           const hasPhoto = userData.photos[photo.type];
           return (
             <Card
               key={photo.type}
-              className={`p-3 transition-all duration-300 ${
-                hasPhoto ? "border-green-500/50 bg-green-500/5" : ""
+              className={`p-4 transition-all duration-300 cursor-pointer active:scale-[0.98] ${
+                hasPhoto 
+                  ? "border-green-500/50 bg-green-500/5" 
+                  : "border-primary/30 hover:border-primary/50"
               }`}
+              onClick={() => openCamera(photo.type)}
             >
-              <div className="flex items-center gap-3">
-                {/* Preview da foto ou placeholder */}
-                <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+              <div className="flex items-center gap-4">
+                {/* Preview da foto ou ícone de câmera */}
+                <div className={`w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center ${
+                  hasPhoto ? "" : "bg-primary/10 border-2 border-dashed border-primary/30"
+                }`}>
                   {hasPhoto ? (
                     <img
                       src={userData.photos[photo.type]!}
@@ -171,41 +176,35 @@ export default function PhotoUploadPage() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="w-8 h-8 text-muted-foreground" />
+                    <Camera className="w-8 h-8 text-primary" />
                   )}
                 </div>
 
-                {/* Info e botões */}
+                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-medium text-sm">{photo.label}</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold">{photo.label}</span>
                     {hasPhoto && (
-                      <Check className="w-4 h-4 text-green-500" />
+                      <Check className="w-5 h-5 text-green-500" />
                     )}
                   </div>
-                  
-                  {/* Botões de ação diretos */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-8 text-xs"
-                      onClick={() => openCamera(photo.type)}
-                    >
-                      <Camera className="w-3 h-3 mr-1" />
-                      Câmera
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-8 text-xs"
-                      onClick={() => openGallery(photo.type)}
-                    >
-                      <Upload className="w-3 h-3 mr-1" />
-                      Galeria
-                    </Button>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {hasPhoto ? "Toque para trocar" : "Toque para tirar foto"}
+                  </p>
                 </div>
+
+                {/* Botão galeria - secundário */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 flex-shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openGallery(photo.type);
+                  }}
+                >
+                  <Upload className="w-5 h-5 text-muted-foreground" />
+                </Button>
               </div>
             </Card>
           );
