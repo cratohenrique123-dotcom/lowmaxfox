@@ -19,27 +19,29 @@ export default function PhotoUploadPage() {
   const navigate = useNavigate();
   const { userData, setUserPhoto, canAnalyze } = useApp();
   const [loading, setLoading] = useState(false);
-  const [pendingType, setPendingType] = useState<PhotoType | null>(null);
   
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  // Refs separados para cada tipo de foto - evita conflitos
+  const frontCameraRef = useRef<HTMLInputElement>(null);
+  const frontGalleryRef = useRef<HTMLInputElement>(null);
+  const leftCameraRef = useRef<HTMLInputElement>(null);
+  const leftGalleryRef = useRef<HTMLInputElement>(null);
+  const rightCameraRef = useRef<HTMLInputElement>(null);
+  const rightGalleryRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (type: PhotoType) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !pendingType) return;
+    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
       if (result) {
-        setUserPhoto(pendingType, result);
-        toast.success(`Foto ${photoTypes.find(p => p.type === pendingType)?.label} carregada!`);
+        setUserPhoto(type, result);
+        toast.success(`Foto ${photoTypes.find(p => p.type === type)?.label} carregada!`);
       }
-      setPendingType(null);
     };
     reader.onerror = () => {
       toast.error("Erro ao carregar a foto");
-      setPendingType(null);
     };
     reader.readAsDataURL(file);
     
@@ -47,18 +49,24 @@ export default function PhotoUploadPage() {
     e.target.value = "";
   };
 
+  const getCameraRef = (type: PhotoType) => {
+    if (type === "front") return frontCameraRef;
+    if (type === "leftProfile") return leftCameraRef;
+    return rightCameraRef;
+  };
+
+  const getGalleryRef = (type: PhotoType) => {
+    if (type === "front") return frontGalleryRef;
+    if (type === "leftProfile") return leftGalleryRef;
+    return rightGalleryRef;
+  };
+
   const openCamera = (type: PhotoType) => {
-    setPendingType(type);
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click();
-    }
+    getCameraRef(type).current?.click();
   };
 
   const openGallery = (type: PhotoType) => {
-    setPendingType(type);
-    if (galleryInputRef.current) {
-      galleryInputRef.current.click();
-    }
+    getGalleryRef(type).current?.click();
   };
 
   const allPhotosUploaded =
@@ -92,23 +100,53 @@ export default function PhotoUploadPage() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
-      {/* Input para câmera - capture="environment" para usar câmera traseira, ou "user" para frontal */}
+      {/* Inputs separados por tipo de foto - CÂMERA */}
       <input
         type="file"
-        ref={cameraInputRef}
+        ref={frontCameraRef}
         className="hidden"
         accept="image/*"
         capture="user"
-        onChange={handleFileSelect}
+        onChange={handleFileSelect("front")}
       />
-      
-      {/* Input para galeria - sem capture para abrir galeria */}
       <input
         type="file"
-        ref={galleryInputRef}
+        ref={leftCameraRef}
         className="hidden"
         accept="image/*"
-        onChange={handleFileSelect}
+        capture="user"
+        onChange={handleFileSelect("leftProfile")}
+      />
+      <input
+        type="file"
+        ref={rightCameraRef}
+        className="hidden"
+        accept="image/*"
+        capture="user"
+        onChange={handleFileSelect("rightProfile")}
+      />
+      
+      {/* Inputs separados por tipo de foto - GALERIA */}
+      <input
+        type="file"
+        ref={frontGalleryRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileSelect("front")}
+      />
+      <input
+        type="file"
+        ref={leftGalleryRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileSelect("leftProfile")}
+      />
+      <input
+        type="file"
+        ref={rightGalleryRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileSelect("rightProfile")}
       />
 
       {/* Header */}
