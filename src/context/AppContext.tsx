@@ -107,9 +107,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    // Não salvar fotos no localStorage (são muito grandes e excedem a quota)
+    // Salvar dados no localStorage, excluindo fotos (muito grandes)
+    // IMPORTANTE: Mantemos os scores salvos para não perder as notas!
     const dataToSave = {
       ...userData,
+      // Preservar scores - NUNCA remover!
+      scores: userData.scores,
       photos: {
         front: null,
         leftProfile: null,
