@@ -84,9 +84,8 @@ export default function PhotoUploadPage() {
     
     if (allPhotosUploaded) {
       setLoading(true);
-      setTimeout(() => {
-        navigate("/analysis", { state: { newAnalysis: true } });
-      }, 1500);
+      // Navegar diretamente sem delay para evitar problemas de estado
+      navigate("/analysis", { state: { newAnalysis: true }, replace: true });
     }
   };
 

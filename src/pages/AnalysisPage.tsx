@@ -195,10 +195,18 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     // ONLY run analysis when coming from photo upload with newAnalysis flag
-    // AND when we don't already have scores OR explicitly requested new analysis
     if (isNewAnalysis && !hasRunRef.current) {
       hasRunRef.current = true;
       setAnalyzing(true);
+      
+      // Verificar se temos as fotos necessárias
+      const hasPhotos = userData.photos.front || userData.photos.leftProfile || userData.photos.rightProfile;
+      
+      if (!hasPhotos) {
+        // Se não tiver fotos, voltar para upload
+        navigate("/upload", { replace: true });
+        return;
+      }
       
       const timer = setTimeout(() => {
         const newScores = generateExpertAnalysis(userData.goal);
@@ -215,7 +223,7 @@ export default function AnalysisPage() {
       // If not a new analysis, ensure we're not in analyzing state
       setAnalyzing(false);
     }
-  }, [isNewAnalysis]);
+  }, [isNewAnalysis, userData.photos, navigate]);
 
   const scores = userData.scores;
   const canDoNewAnalysis = canAnalyze();
