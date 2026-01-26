@@ -46,7 +46,10 @@ interface UserData {
 interface AppContextType {
   userData: UserData;
   setUserGoal: (goal: string) => void;
-  setUserPhoto: (type: "front" | "leftProfile" | "rightProfile", photo: string) => void;
+  setUserPhoto: (
+    type: "front" | "leftProfile" | "rightProfile",
+    photo: string | null
+  ) => void;
   setScores: (scores: UserData["scores"]) => void;
   addCheckin: (date: string, habits: string[]) => void;
   addEvolution: (entry: UserData["evolution"][0]) => void;
@@ -116,6 +119,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...userData,
       // Preservar scores - NUNCA remover!
       scores: userData.scores,
+      // IMPORTANTE: não persistir foto (base64) no localStorage (pode estourar quota e travar a UI)
+      lastAnalysisPhoto: null,
       photos: {
         front: null,
         leftProfile: null,
@@ -143,7 +148,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUserData((prev) => ({ ...prev, goal }));
   };
 
-  const setUserPhoto = (type: "front" | "leftProfile" | "rightProfile", photo: string) => {
+  const setUserPhoto = (type: "front" | "leftProfile" | "rightProfile", photo: string | null) => {
     setUserData((prev) => ({
       ...prev,
       photos: { ...prev.photos, [type]: photo },

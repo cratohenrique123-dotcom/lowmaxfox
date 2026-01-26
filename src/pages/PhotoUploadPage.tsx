@@ -20,6 +20,14 @@ export default function PhotoUploadPage() {
   const { userData, setUserPhoto, canAnalyze } = useApp();
   const [loading, setLoading] = useState(false);
   const [loadingPhoto, setLoadingPhoto] = useState<PhotoType | null>(null);
+
+  // Controle de concorrência: se o usuário trocar rápido a mesma foto,
+  // só aplicamos o último processamento.
+  const latestProcessByTypeRef = useRef<Record<PhotoType, number>>({
+    front: 0,
+    leftProfile: 0,
+    rightProfile: 0,
+  });
   
   // Refs separados para cada tipo de foto - CÂMERA
   const frontCameraRef = useRef<HTMLInputElement>(null);
@@ -31,25 +39,81 @@ export default function PhotoUploadPage() {
   const leftGalleryRef = useRef<HTMLInputElement>(null);
   const rightGalleryRef = useRef<HTMLInputElement>(null);
 
+  const fileToResizedDataUrl = useCallback((file: File) => {
+    // Reduz tamanho para evitar travamentos / tela preta em dispositivos com pouca memória.
+    const MAX_DIMENSION = 1280;
+    const JPEG_QUALITY = 0.85;
+
+    return new Promise<string>((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const srcW = img.naturalWidth || img.width;
+          const srcH = img.naturalHeight || img.height;
+          const maxSide = Math.max(srcW, srcH);
+          const scale = maxSide > MAX_DIMENSION ? MAX_DIMENSION / maxSide : 1;
+
+          const targetW = Math.max(1, Math.round(srcW * scale));
+          const targetH = Math.max(1, Math.round(srcH * scale));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas 2D context unavailable");
+
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Erro ao decodificar a imagem"));
+      };
+
+      img.src = objectUrl;
+    });
+  }, []);
+
   // Handler genérico para processar arquivo selecionado
-  const processFile = useCallback((type: PhotoType, file: File) => {
-    setLoadingPhoto(type);
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setUserPhoto(type, result);
-        toast.success(`Foto ${photoTypes.find(p => p.type === type)?.label} carregada!`);
+  const processFile = useCallback(
+    async (type: PhotoType, file: File) => {
+      latestProcessByTypeRef.current[type] += 1;
+      const processId = latestProcessByTypeRef.current[type];
+
+      // Limpa a foto anterior imediatamente (evita preview com estado antigo)
+      setUserPhoto(type, null);
+      setLoadingPhoto(type);
+
+      try {
+        const dataUrl = await fileToResizedDataUrl(file);
+        if (processId !== latestProcessByTypeRef.current[type]) return;
+
+        setUserPhoto(type, dataUrl);
+        toast.success(`Foto ${photoTypes.find((p) => p.type === type)?.label} carregada!`);
+      } catch (e) {
+        if (processId !== latestProcessByTypeRef.current[type]) return;
+        console.warn("Erro ao processar imagem", e);
+        toast.error("Erro ao carregar a foto");
+        // garante que não renderize preview com dados corrompidos
+        setUserPhoto(type, null);
+      } finally {
+        if (processId === latestProcessByTypeRef.current[type]) {
+          setLoadingPhoto(null);
+        }
       }
-      setLoadingPhoto(null);
-    };
-    reader.onerror = () => {
-      toast.error("Erro ao carregar a foto");
-      setLoadingPhoto(null);
-    };
-    reader.readAsDataURL(file);
-  }, [setUserPhoto]);
+    },
+    [fileToResizedDataUrl, setUserPhoto]
+  );
 
   // Handlers específicos para cada tipo - evita conflitos de estado
   const handleFrontCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,6 +313,7 @@ export default function PhotoUploadPage() {
                       onError={() => {
                         // Se imagem falhar, limpar estado
                         console.warn(`Erro ao carregar imagem ${photo.type}`);
+                        setUserPhoto(photo.type, null);
                       }}
                     />
                   ) : (
