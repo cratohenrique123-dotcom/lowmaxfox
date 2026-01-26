@@ -26,6 +26,7 @@ interface UserData {
     leftProfile: string | null;
     rightProfile: string | null;
   };
+  lastAnalysisPhoto: string | null; // Foto frontal da última análise
   scores: AnalysisResult | null;
   checkins: Record<string, string[]>;
   evolution: {
@@ -52,7 +53,7 @@ interface AppContextType {
   isLoggedIn: boolean;
   setIsLoggedIn: (value: boolean) => void;
   canAnalyze: () => boolean;
-  recordAnalysis: () => void;
+  recordAnalysis: (frontPhoto?: string) => void;
   getRemainingAnalyses: () => number;
   resetPhotos: () => void;
 }
@@ -64,6 +65,7 @@ const defaultUserData: UserData = {
     leftProfile: null,
     rightProfile: null,
   },
+  lastAnalysisPhoto: null,
   scores: null,
   checkins: {},
   evolution: [],
@@ -95,6 +97,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return {
         ...defaultUserData,
         ...parsed,
+        lastAnalysisPhoto: parsed.lastAnalysisPhoto || null,
         analysisHistory: parsed.analysisHistory || [],
         weeklyAnalysisCount: parsed.weeklyAnalysisCount || 0,
         weekStartDate: parsed.weekStartDate || null,
@@ -186,12 +189,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return Math.max(0, WEEKLY_ANALYSIS_LIMIT - recentAnalyses);
   };
 
-  const recordAnalysis = () => {
+  const recordAnalysis = (frontPhoto?: string) => {
     const now = new Date().toISOString();
     
     setUserData((prev) => ({
       ...prev,
       lastAnalysisDate: now,
+      lastAnalysisPhoto: frontPhoto || prev.photos.front || prev.lastAnalysisPhoto,
       analysisHistory: [...prev.analysisHistory, { date: now, photoHashes: [] }],
     }));
   };
