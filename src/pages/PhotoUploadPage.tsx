@@ -1,10 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { useApp } from "@/context/AppContext";
-import { Camera, Upload, Check, ChevronLeft } from "lucide-react";
+import { Camera, Upload, Check, ChevronLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type PhotoType = "front" | "leftProfile" | "rightProfile";
@@ -19,19 +19,22 @@ export default function PhotoUploadPage() {
   const navigate = useNavigate();
   const { userData, setUserPhoto, canAnalyze } = useApp();
   const [loading, setLoading] = useState(false);
+  const [loadingPhoto, setLoadingPhoto] = useState<PhotoType | null>(null);
   
-  // Refs separados para cada tipo de foto - evita conflitos
+  // Refs separados para cada tipo de foto - CÂMERA
   const frontCameraRef = useRef<HTMLInputElement>(null);
-  const frontGalleryRef = useRef<HTMLInputElement>(null);
   const leftCameraRef = useRef<HTMLInputElement>(null);
-  const leftGalleryRef = useRef<HTMLInputElement>(null);
   const rightCameraRef = useRef<HTMLInputElement>(null);
+  
+  // Refs separados para cada tipo de foto - GALERIA  
+  const frontGalleryRef = useRef<HTMLInputElement>(null);
+  const leftGalleryRef = useRef<HTMLInputElement>(null);
   const rightGalleryRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (type: PhotoType) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Handler genérico para processar arquivo selecionado
+  const processFile = useCallback((type: PhotoType, file: File) => {
+    setLoadingPhoto(type);
+    
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
@@ -39,35 +42,63 @@ export default function PhotoUploadPage() {
         setUserPhoto(type, result);
         toast.success(`Foto ${photoTypes.find(p => p.type === type)?.label} carregada!`);
       }
+      setLoadingPhoto(null);
     };
     reader.onerror = () => {
       toast.error("Erro ao carregar a foto");
+      setLoadingPhoto(null);
     };
     reader.readAsDataURL(file);
-    
-    // Reset input para permitir selecionar a mesma foto novamente
+  }, [setUserPhoto]);
+
+  // Handlers específicos para cada tipo - evita conflitos de estado
+  const handleFrontCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile("front", file);
     e.target.value = "";
-  };
+  }, [processFile]);
 
-  const getCameraRef = (type: PhotoType) => {
-    if (type === "front") return frontCameraRef;
-    if (type === "leftProfile") return leftCameraRef;
-    return rightCameraRef;
-  };
+  const handleFrontGallery = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile("front", file);
+    e.target.value = "";
+  }, [processFile]);
 
-  const getGalleryRef = (type: PhotoType) => {
-    if (type === "front") return frontGalleryRef;
-    if (type === "leftProfile") return leftGalleryRef;
-    return rightGalleryRef;
-  };
+  const handleLeftCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile("leftProfile", file);
+    e.target.value = "";
+  }, [processFile]);
 
-  const openCamera = (type: PhotoType) => {
-    getCameraRef(type).current?.click();
-  };
+  const handleLeftGallery = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile("leftProfile", file);
+    e.target.value = "";
+  }, [processFile]);
 
-  const openGallery = (type: PhotoType) => {
-    getGalleryRef(type).current?.click();
-  };
+  const handleRightCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile("rightProfile", file);
+    e.target.value = "";
+  }, [processFile]);
+
+  const handleRightGallery = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile("rightProfile", file);
+    e.target.value = "";
+  }, [processFile]);
+
+  const openCamera = useCallback((type: PhotoType) => {
+    if (type === "front") frontCameraRef.current?.click();
+    else if (type === "leftProfile") leftCameraRef.current?.click();
+    else rightCameraRef.current?.click();
+  }, []);
+
+  const openGallery = useCallback((type: PhotoType) => {
+    if (type === "front") frontGalleryRef.current?.click();
+    else if (type === "leftProfile") leftGalleryRef.current?.click();
+    else rightGalleryRef.current?.click();
+  }, []);
 
   const allPhotosUploaded =
     userData.photos.front && userData.photos.leftProfile && userData.photos.rightProfile;
@@ -77,14 +108,13 @@ export default function PhotoUploadPage() {
   const handleAnalyze = () => {
     if (!canProceed) {
       toast.error("Limite de análises atingido", {
-        description: "Você já atingiu o limite de 3 análises nesta semana. Tente novamente daqui alguns dias.",
+        description: "Você já atingiu o limite de 3 análises nesta semana.",
       });
       return;
     }
     
     if (allPhotosUploaded) {
       setLoading(true);
-      // Navegar diretamente sem delay para evitar problemas de estado
       navigate("/analysis", { state: { newAnalysis: true }, replace: true });
     }
   };
@@ -99,53 +129,53 @@ export default function PhotoUploadPage() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
-      {/* Inputs separados por tipo de foto - CÂMERA */}
+      {/* CÂMERA - capture="environment" para câmera traseira */}
       <input
         type="file"
         ref={frontCameraRef}
         className="hidden"
         accept="image/*"
-        capture="user"
-        onChange={handleFileSelect("front")}
+        capture="environment"
+        onChange={handleFrontCamera}
       />
       <input
         type="file"
         ref={leftCameraRef}
         className="hidden"
         accept="image/*"
-        capture="user"
-        onChange={handleFileSelect("leftProfile")}
+        capture="environment"
+        onChange={handleLeftCamera}
       />
       <input
         type="file"
         ref={rightCameraRef}
         className="hidden"
         accept="image/*"
-        capture="user"
-        onChange={handleFileSelect("rightProfile")}
+        capture="environment"
+        onChange={handleRightCamera}
       />
       
-      {/* Inputs separados por tipo de foto - GALERIA */}
+      {/* GALERIA - sem capture, abre apenas galeria */}
       <input
         type="file"
         ref={frontGalleryRef}
         className="hidden"
         accept="image/*"
-        onChange={handleFileSelect("front")}
+        onChange={handleFrontGallery}
       />
       <input
         type="file"
         ref={leftGalleryRef}
         className="hidden"
         accept="image/*"
-        onChange={handleFileSelect("leftProfile")}
+        onChange={handleLeftGallery}
       />
       <input
         type="file"
         ref={rightGalleryRef}
         className="hidden"
         accept="image/*"
-        onChange={handleFileSelect("rightProfile")}
+        onChange={handleRightGallery}
       />
 
       {/* Header */}
@@ -190,7 +220,10 @@ export default function PhotoUploadPage() {
       {/* Photo Cards - Toque para abrir câmera diretamente */}
       <div className="space-y-3 mb-6">
         {photoTypes.map((photo) => {
-          const hasPhoto = userData.photos[photo.type];
+          const photoData = userData.photos[photo.type];
+          const hasPhoto = !!photoData && photoData.length > 0;
+          const isLoading = loadingPhoto === photo.type;
+          
           return (
             <Card
               key={photo.type}
@@ -199,18 +232,24 @@ export default function PhotoUploadPage() {
                   ? "border-green-500/50 bg-green-500/5" 
                   : "border-primary/30 hover:border-primary/50"
               }`}
-              onClick={() => openCamera(photo.type)}
+              onClick={() => !isLoading && openCamera(photo.type)}
             >
               <div className="flex items-center gap-4">
                 {/* Preview da foto ou ícone de câmera */}
                 <div className={`w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center ${
                   hasPhoto ? "" : "bg-primary/10 border-2 border-dashed border-primary/30"
                 }`}>
-                  {hasPhoto ? (
+                  {isLoading ? (
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                  ) : hasPhoto ? (
                     <img
-                      src={userData.photos[photo.type]!}
+                      src={photoData}
                       alt={photo.label}
                       className="w-full h-full object-cover"
+                      onError={() => {
+                        // Se imagem falhar, limpar estado
+                        console.warn(`Erro ao carregar imagem ${photo.type}`);
+                      }}
                     />
                   ) : (
                     <Camera className="w-8 h-8 text-primary" />
@@ -221,12 +260,12 @@ export default function PhotoUploadPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-semibold">{photo.label}</span>
-                    {hasPhoto && (
+                    {hasPhoto && !isLoading && (
                       <Check className="w-5 h-5 text-green-500" />
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {hasPhoto ? "Toque para trocar" : "Toque para tirar foto"}
+                    {isLoading ? "Carregando..." : hasPhoto ? "Toque para trocar" : "Toque para tirar foto"}
                   </p>
                 </div>
 
@@ -235,6 +274,7 @@ export default function PhotoUploadPage() {
                   variant="ghost"
                   size="icon"
                   className="h-10 w-10 flex-shrink-0"
+                  disabled={isLoading}
                   onClick={(e) => {
                     e.stopPropagation();
                     openGallery(photo.type);

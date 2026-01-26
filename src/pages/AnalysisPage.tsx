@@ -211,7 +211,7 @@ export default function AnalysisPage() {
       const timer = setTimeout(() => {
         const newScores = generateExpertAnalysis(userData.goal);
         setScores(newScores);
-        recordAnalysis();
+        recordAnalysis(userData.photos.front || undefined);
         setAnalyzing(false);
         setShowCongrats(true);
         // Clear the navigation state to prevent re-analysis on page refresh
@@ -316,10 +316,10 @@ export default function AnalysisPage() {
         {/* User Photo + Main Scores */}
         <Card variant="neon" className="p-5">
           <div className="flex items-center gap-4 mb-4">
-            {userData.photos.front && (
+            {(userData.photos.front || userData.lastAnalysisPhoto) && (
               <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary shadow-[0_0_20px_hsl(200,100%,50%/0.4)] flex-shrink-0">
                 <img
-                  src={userData.photos.front}
+                  src={userData.photos.front || userData.lastAnalysisPhoto!}
                   alt="Sua foto frontal"
                   className="w-full h-full object-cover"
                 />
