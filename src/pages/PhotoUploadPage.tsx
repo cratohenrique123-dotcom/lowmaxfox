@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,40 @@ export default function PhotoUploadPage() {
     leftProfile: 0,
     rightProfile: 0,
   });
+
+  const activePreviewRef = useRef<Record<PhotoType, string | null>>({
+    front: userData.photos.front,
+    leftProfile: userData.photos.leftProfile,
+    rightProfile: userData.photos.rightProfile,
+  });
+
+  const revokeIfBlobUrl = useCallback((maybeUrl: string | null | undefined) => {
+    if (!maybeUrl) return;
+    if (maybeUrl.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(maybeUrl);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    activePreviewRef.current = {
+      front: userData.photos.front,
+      leftProfile: userData.photos.leftProfile,
+      rightProfile: userData.photos.rightProfile,
+    };
+  }, [userData.photos.front, userData.photos.leftProfile, userData.photos.rightProfile]);
+
+  useEffect(() => {
+    // Cleanup de objectURLs ao sair da página
+    return () => {
+      revokeIfBlobUrl(activePreviewRef.current.front);
+      revokeIfBlobUrl(activePreviewRef.current.leftProfile);
+      revokeIfBlobUrl(activePreviewRef.current.rightProfile);
+    };
+  }, [revokeIfBlobUrl]);
   
   // Refs separados para cada tipo de foto - CÂMERA
   const frontCameraRef = useRef<HTMLInputElement>(null);
@@ -39,50 +73,67 @@ export default function PhotoUploadPage() {
   const leftGalleryRef = useRef<HTMLInputElement>(null);
   const rightGalleryRef = useRef<HTMLInputElement>(null);
 
-  const fileToResizedDataUrl = useCallback((file: File) => {
-    // Reduz tamanho para evitar travamentos / tela preta em dispositivos com pouca memória.
-    const MAX_DIMENSION = 1280;
-    const JPEG_QUALITY = 0.85;
+  const fileToResizedBlobUrl = useCallback(
+    (file: File) => {
+      // Evita base64 (muito pesado) e reduz o tamanho antes do preview.
+      // Isso reduz drasticamente picos de memória que podem causar “tela preta”.
+      const MAX_DIMENSION = 1024;
+      const JPEG_QUALITY = 0.82;
 
-    return new Promise<string>((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
+      return new Promise<string>((resolve, reject) => {
+        const sourceUrl = URL.createObjectURL(file);
+        const img = new Image();
 
-      img.onload = () => {
-        try {
-          const srcW = img.naturalWidth || img.width;
-          const srcH = img.naturalHeight || img.height;
-          const maxSide = Math.max(srcW, srcH);
-          const scale = maxSide > MAX_DIMENSION ? MAX_DIMENSION / maxSide : 1;
+        img.onload = () => {
+          try {
+            const srcW = img.naturalWidth || img.width;
+            const srcH = img.naturalHeight || img.height;
+            const maxSide = Math.max(srcW, srcH);
+            const scale = maxSide > MAX_DIMENSION ? MAX_DIMENSION / maxSide : 1;
 
-          const targetW = Math.max(1, Math.round(srcW * scale));
-          const targetH = Math.max(1, Math.round(srcH * scale));
+            const targetW = Math.max(1, Math.round(srcW * scale));
+            const targetH = Math.max(1, Math.round(srcH * scale));
 
-          const canvas = document.createElement("canvas");
-          canvas.width = targetW;
-          canvas.height = targetH;
+            const canvas = document.createElement("canvas");
+            canvas.width = targetW;
+            canvas.height = targetH;
 
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("Canvas 2D context unavailable");
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("Canvas 2D context unavailable");
 
-          ctx.drawImage(img, 0, 0, targetW, targetH);
-          const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-          resolve(dataUrl);
-        } catch (err) {
-          reject(err);
-        } finally {
-          URL.revokeObjectURL(objectUrl);
-        }
-      };
+            ctx.drawImage(img, 0, 0, targetW, targetH);
 
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error("Erro ao decodificar a imagem"));
-      };
+            canvas.toBlob(
+              (blob) => {
+                try {
+                  if (!blob) throw new Error("Falha ao gerar blob");
+                  const blobUrl = URL.createObjectURL(blob);
+                  resolve(blobUrl);
+                } catch (err) {
+                  reject(err);
+                } finally {
+                  URL.revokeObjectURL(sourceUrl);
+                }
+              },
+              "image/jpeg",
+              JPEG_QUALITY
+            );
+          } catch (err) {
+            URL.revokeObjectURL(sourceUrl);
+            reject(err);
+          }
+        };
 
-      img.src = objectUrl;
-    });
-  }, []);
+        img.onerror = () => {
+          URL.revokeObjectURL(sourceUrl);
+          reject(new Error("Erro ao decodificar a imagem"));
+        };
+
+        img.src = sourceUrl;
+      });
+    },
+    []
+  );
 
   // Handler genérico para processar arquivo selecionado
   const processFile = useCallback(
@@ -90,15 +141,23 @@ export default function PhotoUploadPage() {
       latestProcessByTypeRef.current[type] += 1;
       const processId = latestProcessByTypeRef.current[type];
 
-      // Limpa a foto anterior imediatamente (evita preview com estado antigo)
+      // Limpa foto anterior (e libera memória se era blob URL)
+      revokeIfBlobUrl(activePreviewRef.current[type]);
       setUserPhoto(type, null);
       setLoadingPhoto(type);
 
       try {
-        const dataUrl = await fileToResizedDataUrl(file);
+        const blobUrl = await fileToResizedBlobUrl(file);
         if (processId !== latestProcessByTypeRef.current[type]) return;
 
-        setUserPhoto(type, dataUrl);
+        // Se houve uma troca rápida, libera o URL recém criado também
+        if (processId !== latestProcessByTypeRef.current[type]) {
+          revokeIfBlobUrl(blobUrl);
+          return;
+        }
+
+        activePreviewRef.current[type] = blobUrl;
+        setUserPhoto(type, blobUrl);
         toast.success(`Foto ${photoTypes.find((p) => p.type === type)?.label} carregada!`);
       } catch (e) {
         if (processId !== latestProcessByTypeRef.current[type]) return;
@@ -112,7 +171,7 @@ export default function PhotoUploadPage() {
         }
       }
     },
-    [fileToResizedDataUrl, setUserPhoto]
+    [fileToResizedBlobUrl, revokeIfBlobUrl, setUserPhoto]
   );
 
   // Handlers específicos para cada tipo - evita conflitos de estado
@@ -313,6 +372,7 @@ export default function PhotoUploadPage() {
                       onError={() => {
                         // Se imagem falhar, limpar estado
                         console.warn(`Erro ao carregar imagem ${photo.type}`);
+                        revokeIfBlobUrl(userData.photos[photo.type]);
                         setUserPhoto(photo.type, null);
                       }}
                     />
