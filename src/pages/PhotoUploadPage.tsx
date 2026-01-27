@@ -46,6 +46,78 @@ export default function PhotoUploadPage() {
     }
   }, []);
 
+  const nextFrame = useCallback(() => {
+    return new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }, []);
+
+  async function getImageDimensionsFromFile(
+    file: File
+  ): Promise<{ width: number; height: number } | null> {
+    // Read only the header to avoid decoding full-resolution images (helps prevent iOS Safari crashes)
+    const header = await file.slice(0, 256 * 1024).arrayBuffer();
+    const view = new DataView(header);
+
+    // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    const isPng =
+      view.byteLength >= 24 &&
+      view.getUint32(0) === 0x89504e47 &&
+      view.getUint32(4) === 0x0d0a1a0a;
+
+    if (isPng) {
+      // IHDR chunk starts at byte 8, width/height at 16/20
+      const width = view.getUint32(16);
+      const height = view.getUint32(20);
+      if (width > 0 && height > 0) return { width, height };
+      return null;
+    }
+
+    // JPEG: starts with FF D8
+    const isJpeg = view.byteLength >= 4 && view.getUint16(0) === 0xffd8;
+    if (isJpeg) {
+      let offset = 2;
+      while (offset + 9 < view.byteLength) {
+        // Find marker (0xFF??)
+        if (view.getUint8(offset) !== 0xff) {
+          offset += 1;
+          continue;
+        }
+        const marker = view.getUint8(offset + 1);
+
+        // Standalone markers without length
+        if (marker === 0xd8 || marker === 0xd9) {
+          offset += 2;
+          continue;
+        }
+
+        if (offset + 4 >= view.byteLength) break;
+        const blockLength = view.getUint16(offset + 2);
+        if (blockLength < 2) break;
+
+        // SOF0..SOF3, SOF5..SOF7, SOF9..SOF11, SOF13..SOF15
+        const isSOF =
+          (marker >= 0xc0 && marker <= 0xc3) ||
+          (marker >= 0xc5 && marker <= 0xc7) ||
+          (marker >= 0xc9 && marker <= 0xcb) ||
+          (marker >= 0xcd && marker <= 0xcf);
+
+        if (isSOF) {
+          // [offset+4]=precision, [offset+5..6]=height, [offset+7..8]=width
+          if (offset + 9 >= view.byteLength) break;
+          const height = view.getUint16(offset + 5);
+          const width = view.getUint16(offset + 7);
+          if (width > 0 && height > 0) return { width, height };
+          return null;
+        }
+
+        offset += 2 + blockLength;
+      }
+    }
+
+    return null;
+  }
+
   useEffect(() => {
     activePreviewRef.current = {
       front: userData.photos.front,
@@ -73,67 +145,138 @@ export default function PhotoUploadPage() {
   const leftGalleryRef = useRef<HTMLInputElement>(null);
   const rightGalleryRef = useRef<HTMLInputElement>(null);
 
-  const fileToResizedBlobUrl = useCallback(
-    (file: File) => {
-      // Evita base64 (muito pesado) e reduz o tamanho antes do preview.
-      // Isso reduz drasticamente picos de memória que podem causar “tela preta”.
-      const MAX_DIMENSION = 1024;
-      const JPEG_QUALITY = 0.82;
+  const fileToResizedBlobUrl = useCallback(async (file: File) => {
+    // Evita base64 (muito pesado) e reduz o tamanho antes do preview.
+    // Para iOS Safari, a estratégia mais estável é evitar decodificar em full-res quando possível.
+    const BASE_MAX_DIMENSION = 1024;
+    const JPEG_QUALITY = 0.82;
 
-      return new Promise<string>((resolve, reject) => {
-        const sourceUrl = URL.createObjectURL(file);
-        const img = new Image();
+    // Se o arquivo for muito grande, reduzimos ainda mais o preview para evitar OOM/crash.
+    const maxDimension = file.size > 10 * 1024 * 1024 ? 768 : BASE_MAX_DIMENSION;
 
-        img.onload = () => {
-          try {
-            const srcW = img.naturalWidth || img.width;
-            const srcH = img.naturalHeight || img.height;
-            const maxSide = Math.max(srcW, srcH);
-            const scale = maxSide > MAX_DIMENSION ? MAX_DIMENSION / maxSide : 1;
+    const dims = await getImageDimensionsFromFile(file).catch(() => null);
+    const srcW = dims?.width;
+    const srcH = dims?.height;
+    const scale =
+      srcW && srcH ? Math.min(1, maxDimension / Math.max(srcW, srcH)) : 1;
 
-            const targetW = Math.max(1, Math.round(srcW * scale));
-            const targetH = Math.max(1, Math.round(srcH * scale));
+    const targetW =
+      srcW && srcH ? Math.max(1, Math.round(srcW * scale)) : maxDimension;
+    const targetH =
+      srcW && srcH ? Math.max(1, Math.round(srcH * scale)) : maxDimension;
 
-            const canvas = document.createElement("canvas");
-            canvas.width = targetW;
-            canvas.height = targetH;
+    // Preferir createImageBitmap pois tende a ser mais estável/perf em mobile.
+    if ("createImageBitmap" in window) {
+      try {
+        const bitmap: ImageBitmap = await createImageBitmap(
+          file,
+          {
+            // Só aplicamos resize se tivermos dimensões; caso contrário, deixa o browser decidir.
+            ...(dims ? { resizeWidth: targetW, resizeHeight: targetH } : {}),
+            // Algumas versões do TS DOM lib não tipam resizeQuality.
+            resizeQuality: "high",
+          } as any
+        );
 
-            const ctx = canvas.getContext("2d");
-            if (!ctx) throw new Error("Canvas 2D context unavailable");
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, bitmap.width);
+        canvas.height = Math.max(1, bitmap.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas 2D context unavailable");
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
 
-            ctx.drawImage(img, 0, 0, targetW, targetH);
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (b) => {
+              if (!b) return reject(new Error("Falha ao gerar blob"));
+              resolve(b);
+            },
+            "image/jpeg",
+            JPEG_QUALITY
+          );
+        });
 
-            canvas.toBlob(
-              (blob) => {
+        // libera memória do canvas
+        canvas.width = 0;
+        canvas.height = 0;
+
+        return URL.createObjectURL(blob);
+      } catch (err) {
+        // fallback abaixo
+        console.warn("createImageBitmap/Canvas falhou, usando fallback", err);
+      }
+    }
+
+    // Fallback: Image() + objectURL
+    return new Promise<string>((resolve, reject) => {
+      const sourceUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const srcW2 = img.naturalWidth || img.width;
+          const srcH2 = img.naturalHeight || img.height;
+          const maxSide = Math.max(srcW2, srcH2);
+          const scale2 = maxSide > maxDimension ? maxDimension / maxSide : 1;
+
+          const w = Math.max(1, Math.round(srcW2 * scale2));
+          const h = Math.max(1, Math.round(srcH2 * scale2));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas 2D context unavailable");
+          ctx.drawImage(img, 0, 0, w, h);
+
+          canvas.toBlob(
+            (blob) => {
+              try {
+                if (!blob) throw new Error("Falha ao gerar blob");
+                const blobUrl = URL.createObjectURL(blob);
+                resolve(blobUrl);
+              } catch (e) {
+                reject(e);
+              } finally {
+                // cleanup
                 try {
-                  if (!blob) throw new Error("Falha ao gerar blob");
-                  const blobUrl = URL.createObjectURL(blob);
-                  resolve(blobUrl);
-                } catch (err) {
-                  reject(err);
-                } finally {
                   URL.revokeObjectURL(sourceUrl);
+                } catch {
+                  // ignore
                 }
-              },
-              "image/jpeg",
-              JPEG_QUALITY
-            );
-          } catch (err) {
+                img.src = "";
+                canvas.width = 0;
+                canvas.height = 0;
+              }
+            },
+            "image/jpeg",
+            JPEG_QUALITY
+          );
+        } catch (e) {
+          try {
             URL.revokeObjectURL(sourceUrl);
-            reject(err);
+          } catch {
+            // ignore
           }
-        };
+          img.src = "";
+          reject(e);
+        }
+      };
 
-        img.onerror = () => {
+      img.onerror = () => {
+        try {
           URL.revokeObjectURL(sourceUrl);
-          reject(new Error("Erro ao decodificar a imagem"));
-        };
+        } catch {
+          // ignore
+        }
+        img.src = "";
+        reject(new Error("Erro ao decodificar a imagem"));
+      };
 
-        img.src = sourceUrl;
-      });
-    },
-    []
-  );
+      img.src = sourceUrl;
+    });
+  }, [nextFrame]);
 
   // Handler genérico para processar arquivo selecionado
   const processFile = useCallback(
@@ -141,12 +284,19 @@ export default function PhotoUploadPage() {
       latestProcessByTypeRef.current[type] += 1;
       const processId = latestProcessByTypeRef.current[type];
 
-      // Limpa foto anterior (e libera memória se era blob URL)
-      revokeIfBlobUrl(activePreviewRef.current[type]);
+      // Limpa foto anterior primeiro (remover do DOM), e só depois revoga o blob URL.
+      // Em alguns mobiles, revogar enquanto ainda está renderizado pode causar instabilidade.
+      const prevUrl = activePreviewRef.current[type];
+      activePreviewRef.current[type] = null;
       setUserPhoto(type, null);
       setLoadingPhoto(type);
 
+      // garante 1 frame para o React retirar a imagem antiga antes do trabalho pesado
+      await nextFrame();
+      revokeIfBlobUrl(prevUrl);
+
       try {
+        console.info(`[upload] start processing ${type} (id=${processId}, size=${file.size})`);
         const blobUrl = await fileToResizedBlobUrl(file);
         if (processId !== latestProcessByTypeRef.current[type]) return;
 
@@ -159,6 +309,7 @@ export default function PhotoUploadPage() {
         activePreviewRef.current[type] = blobUrl;
         setUserPhoto(type, blobUrl);
         toast.success(`Foto ${photoTypes.find((p) => p.type === type)?.label} carregada!`);
+        console.info(`[upload] done ${type} (id=${processId})`);
       } catch (e) {
         if (processId !== latestProcessByTypeRef.current[type]) return;
         console.warn("Erro ao processar imagem", e);
@@ -171,7 +322,7 @@ export default function PhotoUploadPage() {
         }
       }
     },
-    [fileToResizedBlobUrl, revokeIfBlobUrl, setUserPhoto]
+    [fileToResizedBlobUrl, nextFrame, revokeIfBlobUrl, setUserPhoto]
   );
 
   // Handlers específicos para cada tipo - evita conflitos de estado
