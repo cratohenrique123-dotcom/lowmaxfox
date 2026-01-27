@@ -8,6 +8,7 @@ import { Camera, Upload, Check, ChevronLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type PhotoType = "front" | "leftProfile" | "rightProfile";
+type PhotoSource = "camera" | "gallery";
 
 const photoTypes: { type: PhotoType; label: string }[] = [
   { type: "front", label: "Frente" },
@@ -145,7 +146,7 @@ export default function PhotoUploadPage() {
   const leftGalleryRef = useRef<HTMLInputElement>(null);
   const rightGalleryRef = useRef<HTMLInputElement>(null);
 
-  const fileToResizedBlobUrl = useCallback(async (file: File) => {
+  const fileToResizedBlobUrl = useCallback(async (file: File, source: PhotoSource) => {
     // Evita base64 (muito pesado) e reduz o tamanho antes do preview.
     // Para iOS Safari, a estratégia mais estável é evitar decodificar em full-res quando possível.
     const BASE_MAX_DIMENSION = 1024;
@@ -165,8 +166,10 @@ export default function PhotoUploadPage() {
     const targetH =
       srcW && srcH ? Math.max(1, Math.round(srcH * scale)) : maxDimension;
 
-    // Preferir createImageBitmap pois tende a ser mais estável/perf em mobile.
-    if ("createImageBitmap" in window) {
+    // IMPORTANT: Fotos vindas da CÂMERA (capture) podem crashar no mobile ao usar createImageBitmap
+    // (especialmente na 2ª captura). Para camera, sempre usar o caminho Image() + canvas.
+    // Galeria mantém o comportamento atual (createImageBitmap quando disponível).
+    if (source !== "camera" && "createImageBitmap" in window) {
       try {
         const bitmap: ImageBitmap = await createImageBitmap(
           file,
@@ -280,7 +283,7 @@ export default function PhotoUploadPage() {
 
   // Handler genérico para processar arquivo selecionado
   const processFile = useCallback(
-    async (type: PhotoType, file: File) => {
+    async (type: PhotoType, file: File, source: PhotoSource) => {
       latestProcessByTypeRef.current[type] += 1;
       const processId = latestProcessByTypeRef.current[type];
 
@@ -297,7 +300,7 @@ export default function PhotoUploadPage() {
 
       try {
         console.info(`[upload] start processing ${type} (id=${processId}, size=${file.size})`);
-        const blobUrl = await fileToResizedBlobUrl(file);
+        const blobUrl = await fileToResizedBlobUrl(file, source);
         if (processId !== latestProcessByTypeRef.current[type]) return;
 
         // Se houve uma troca rápida, libera o URL recém criado também
@@ -328,37 +331,37 @@ export default function PhotoUploadPage() {
   // Handlers específicos para cada tipo - evita conflitos de estado
   const handleFrontCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile("front", file);
+    if (file) processFile("front", file, "camera");
     e.target.value = "";
   }, [processFile]);
 
   const handleFrontGallery = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile("front", file);
+    if (file) processFile("front", file, "gallery");
     e.target.value = "";
   }, [processFile]);
 
   const handleLeftCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile("leftProfile", file);
+    if (file) processFile("leftProfile", file, "camera");
     e.target.value = "";
   }, [processFile]);
 
   const handleLeftGallery = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile("leftProfile", file);
+    if (file) processFile("leftProfile", file, "gallery");
     e.target.value = "";
   }, [processFile]);
 
   const handleRightCamera = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile("rightProfile", file);
+    if (file) processFile("rightProfile", file, "camera");
     e.target.value = "";
   }, [processFile]);
 
   const handleRightGallery = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile("rightProfile", file);
+    if (file) processFile("rightProfile", file, "gallery");
     e.target.value = "";
   }, [processFile]);
 
