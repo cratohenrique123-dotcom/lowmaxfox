@@ -324,7 +324,7 @@ export default function PhotoUploadPage() {
         ref={cameraRef}
         className="hidden"
         accept="image/*"
-        capture="environment"
+        capture="user"
         onChange={handleCamera}
       />
       <input
