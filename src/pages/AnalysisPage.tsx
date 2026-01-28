@@ -5,183 +5,67 @@ import { Card } from "@/components/ui/card";
 import { ScoreBar } from "@/components/ScoreBar";
 import { BottomNav } from "@/components/BottomNav";
 import { useApp } from "@/context/AppContext";
-import { ChevronLeft, Sparkles, AlertCircle, ChevronRight, Trophy, TrendingUp, Camera, Lightbulb } from "lucide-react";
+import { ChevronLeft, Sparkles, AlertCircle, ChevronRight, Trophy, Camera, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
-// Expert facial analysis - sistema avançado de análise facial VERSÃO 3.0
-// Avalia: Pele, Mandíbula, Maçãs do rosto, Simetria facial (30-100)
-// Nota geral baseada em HARMONIA TOTAL (não média matemática)
-function generateExpertAnalysis(goal: string) {
-  // Base scores por objetivo - representam padrões típicos de análise
-  const baseScores = {
-    face: { skin: 78, jawline: 82, cheekbones: 80, symmetry: 81 },
-    skin: { skin: 74, jawline: 78, cheekbones: 77, symmetry: 79 },
-    posture: { skin: 80, jawline: 76, cheekbones: 78, symmetry: 77 },
-    general: { skin: 79, jawline: 79, cheekbones: 78, symmetry: 80 },
-  };
-
-  const goalKey = (goal as keyof typeof baseScores) || "general";
-  const base = baseScores[goalKey] || baseScores.general;
-
-  // Aplicar scores individuais (mínimo 30)
-  let skin = Math.max(30, base.skin);
-  let jawline = Math.max(30, base.jawline);
-  let cheekbones = Math.max(30, base.cheekbones);
-  let symmetry = Math.max(30, base.symmetry);
-
-  // Calcular média para determinar nível estético
-  const avgScore = (skin + jawline + cheekbones + symmetry) / 4;
-
-  // NOTA GERAL baseada em HARMONIA TOTAL (não média matemática)
-  // Escala:
-  // 70-80: aparência comum
-  // 81-88: acima da média
-  // 89-94: muito bonito
-  // 95-100: beleza excepcional (modelos como Chico Lachowski, Jordan Barrett)
+// Convert blob URL to base64
+async function blobUrlToBase64(blobUrl: string): Promise<string> {
+  const response = await fetch(blobUrl);
+  const blob = await response.blob();
   
-  let overall: number;
-  
-  if (avgScore >= 85) {
-    // Padrão modelo/excepcional → 95-100
-    overall = Math.round(95 + (avgScore - 85) * 0.33);
-    overall = Math.min(100, overall);
-  } else if (avgScore >= 80) {
-    // Muito bonito → 89-94
-    overall = Math.round(89 + (avgScore - 80) * 1);
-  } else if (avgScore >= 75) {
-    // Acima da média → 81-88
-    overall = Math.round(81 + (avgScore - 75) * 1.4);
-  } else {
-    // Aparência comum → 70-80
-    overall = Math.round(70 + (avgScore - 65) * 1);
-  }
-  
-  // Garantir mínimo de 30 e máximo de 100
-  overall = Math.max(30, Math.min(100, overall));
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      // Remove data URL prefix if present
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
-  // POTENCIAL (sempre entre 91 e 100)
-  // - Quem já é muito bonito: 91-95
-  // - Quem tem espaço para evoluir: 96-100
-  let potential: number;
-  if (overall >= 95) {
-    potential = 91; // Beleza excepcional, pouco espaço
-  } else if (overall >= 89) {
-    potential = 93; // Muito bonito
-  } else if (overall >= 81) {
-    potential = 96; // Acima da média
-  } else {
-    potential = 99; // Maior espaço para evolução
+// Call the AI edge function to analyze the face
+async function analyzeWithAI(imageBase64: string): Promise<{
+  overall: number;
+  potential: number;
+  jawline: number;
+  symmetry: number;
+  skinQuality: number;
+  cheekbones: number;
+  strengths: string[];
+  weaknesses: string[];
+  tips: string[];
+}> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Configuração do servidor não encontrada");
   }
 
-  // Pontos fortes baseados nos maiores scores
-  const scoreMap = [
-    { key: "skin", value: skin, 
-      strengths: [
-        "Textura cutânea uniforme e saudável",
-        "Tom de pele homogêneo e luminoso",
-        "Boa elasticidade e hidratação natural"
-      ]
+  const response = await fetch(`${supabaseUrl}/functions/v1/analyze-face`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${supabaseKey}`,
     },
-    { key: "jawline", value: jawline,
-      strengths: [
-        "Linha da mandíbula bem definida e angular",
-        "Estrutura óssea mandibular marcada",
-        "Ângulo gonial favorável para estética facial"
-      ]
-    },
-    { key: "cheekbones", value: cheekbones,
-      strengths: [
-        "Maçãs do rosto elevadas e definidas",
-        "Volume adequado na região zigomática",
-        "Projeção lateral das maçãs favorável"
-      ]
-    },
-    { key: "symmetry", value: symmetry,
-      strengths: [
-        "Excelente simetria entre as hemifaces",
-        "Alinhamento do eixo facial equilibrado",
-        "Proporções faciais harmoniosas"
-      ]
-    },
-  ];
+    body: JSON.stringify({ imageBase64 }),
+  });
 
-  // Ordenar e selecionar top 3 pontos fortes
-  const sorted = [...scoreMap].sort((a, b) => b.value - a.value);
-  const strengths = sorted.slice(0, 3).map(s => s.strengths[0]);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error("Limite de requisições atingido. Tente novamente em alguns minutos.");
+    }
+    if (response.status === 402) {
+      throw new Error("Créditos esgotados. Entre em contato com o suporte.");
+    }
+    throw new Error(errorData.error || "Erro ao analisar imagem");
+  }
 
-  // Pontos a evoluir baseados nos menores scores
-  const weaknessMap = [
-    { key: "skin", value: skin,
-      weaknesses: [
-        "Textura cutânea pode melhorar com skincare adequado",
-        "Hidratação da pele precisa de atenção diária",
-        "Uniformidade do tom pode ser trabalhada"
-      ]
-    },
-    { key: "jawline", value: jawline,
-      weaknesses: [
-        "Definição mandibular pode ser intensificada com mewing",
-        "Ângulo gonial tem potencial para maior definição",
-        "Região submandibular pode ser trabalhada"
-      ]
-    },
-    { key: "cheekbones", value: cheekbones,
-      weaknesses: [
-        "Maçãs do rosto podem ser destacadas com técnicas",
-        "Volume zigomático tem espaço para evolução",
-        "Definição das maçãs pode ser intensificada"
-      ]
-    },
-    { key: "symmetry", value: symmetry,
-      weaknesses: [
-        "Assimetrias leves podem ser corrigidas com postura",
-        "Alinhamento facial pode ser otimizado",
-        "Proporções podem ser equilibradas com técnicas específicas"
-      ]
-    },
-  ];
-
-  // Ordenar ascendente e selecionar 3 pontos a evoluir
-  const sortedWeak = [...weaknessMap].sort((a, b) => a.value - b.value);
-  const weaknesses = sortedWeak.slice(0, 3).map(w => w.weaknesses[0]);
-
-  // Dicas personalizadas por objetivo
-  const tipsMap: Record<string, string[]> = {
-    face: [
-      "Pratique mewing diariamente para definir a mandíbula",
-      "Faça exercícios de mastigação para fortalecer o maxilar",
-      "Mantenha postura correta para realçar a estrutura facial",
-    ],
-    skin: [
-      "Use protetor solar diariamente para preservar a pele",
-      "Mantenha hidratação constante (2-3L de água/dia)",
-      "Estabeleça rotina de skincare manhã e noite",
-    ],
-    posture: [
-      "Durma de costas para evitar assimetrias",
-      "Pratique exercícios de correção postural",
-      "Mantenha tela do celular na altura dos olhos",
-    ],
-    general: [
-      "Pratique mewing diariamente para definir a mandíbula",
-      "Mantenha hidratação constante (2-3L de água/dia)",
-      "Use protetor solar diariamente para preservar a pele",
-    ],
-  };
-
-  const tips = tipsMap[goalKey] || tipsMap.general;
-
-  return {
-    overall,
-    potential,
-    jawline,
-    symmetry,
-    skinQuality: skin,
-    cheekbones,
-    strengths,
-    weaknesses,
-    tips,
-  };
+  return response.json();
 }
 
 export default function AnalysisPage() {
@@ -191,6 +75,7 @@ export default function AnalysisPage() {
   const isNewAnalysis = location.state?.newAnalysis;
   const [analyzing, setAnalyzing] = useState(!!isNewAnalysis);
   const [showCongrats, setShowCongrats] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState(0);
   const hasRunRef = React.useRef(false);
 
   useEffect(() => {
@@ -199,31 +84,59 @@ export default function AnalysisPage() {
       hasRunRef.current = true;
       setAnalyzing(true);
       
-      // Verificar se temos as fotos necessárias
-      const hasPhotos = userData.photos.front || userData.photos.leftProfile || userData.photos.rightProfile;
+      // Check if we have the photo
+      const hasPhoto = userData.photos.front;
       
-      if (!hasPhotos) {
-        // Se não tiver fotos, voltar para upload
-        navigate("/upload", { replace: true });
+      if (!hasPhoto) {
+        navigate("/photo-upload", { replace: true });
         return;
       }
       
-      const timer = setTimeout(() => {
-        const newScores = generateExpertAnalysis(userData.goal);
-        setScores(newScores);
-        recordAnalysis(userData.photos.front || undefined);
-        setAnalyzing(false);
-        setShowCongrats(true);
-        // Clear the navigation state to prevent re-analysis on page refresh
-        window.history.replaceState({}, document.title);
-      }, 3000);
+      // Run AI analysis
+      const runAnalysis = async () => {
+        try {
+          // Animate steps
+          const stepInterval = setInterval(() => {
+            setAnalysisStep(prev => Math.min(prev + 1, 3));
+          }, 1500);
+
+          // Convert blob URL to base64
+          console.log("Converting image to base64...");
+          const imageBase64 = await blobUrlToBase64(userData.photos.front!);
+          console.log("Image converted, calling AI...");
+
+          // Call AI
+          const newScores = await analyzeWithAI(imageBase64);
+          
+          clearInterval(stepInterval);
+          
+          // Save scores
+          setScores(newScores);
+          recordAnalysis(userData.photos.front || undefined);
+          setAnalyzing(false);
+          setShowCongrats(true);
+          
+          // Clear navigation state
+          window.history.replaceState({}, document.title);
+          
+          toast.success("Análise concluída!", {
+            description: "Sua análise facial foi realizada com sucesso.",
+          });
+        } catch (error) {
+          console.error("Analysis error:", error);
+          setAnalyzing(false);
+          toast.error("Erro na análise", {
+            description: error instanceof Error ? error.message : "Tente novamente mais tarde.",
+          });
+          navigate("/photo-upload", { replace: true });
+        }
+      };
       
-      return () => clearTimeout(timer);
+      runAnalysis();
     } else if (!isNewAnalysis) {
-      // If not a new analysis, ensure we're not in analyzing state
       setAnalyzing(false);
     }
-  }, [isNewAnalysis, userData.photos, navigate]);
+  }, [isNewAnalysis, userData.photos, navigate, setScores, recordAnalysis]);
 
   const scores = userData.scores;
   const canDoNewAnalysis = canAnalyze();
@@ -235,12 +148,18 @@ export default function AnalysisPage() {
       });
       return;
     }
-    // Reset photos and states before navigating to upload
     resetPhotos();
-    navigate("/upload");
+    navigate("/photo-upload");
   };
 
   if (analyzing) {
+    const steps = [
+      "Processando imagem...",
+      "Analisando estrutura facial...",
+      "Calculando métricas...",
+      "Gerando resultados personalizados...",
+    ];
+
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
         <div className="text-center space-y-6">
@@ -252,15 +171,22 @@ export default function AnalysisPage() {
             </div>
           </div>
           <div>
-            <h2 className="text-xl font-bold mb-2">Análise Facial Especializada</h2>
+            <h2 className="text-xl font-bold mb-2">Análise Facial com IA</h2>
             <p className="text-muted-foreground text-sm">
-              Nossa IA está analisando proporções, simetria e características faciais...
+              Nossa IA está analisando sua foto em detalhes...
             </p>
           </div>
           <div className="space-y-2 text-xs text-muted-foreground">
-            <p className="animate-pulse">• Verificando proporção áurea...</p>
-            <p className="animate-pulse" style={{ animationDelay: "0.5s" }}>• Analisando estrutura óssea...</p>
-            <p className="animate-pulse" style={{ animationDelay: "1s" }}>• Calculando potencial de evolução...</p>
+            {steps.map((step, i) => (
+              <p
+                key={i}
+                className={`transition-all duration-500 ${
+                  i <= analysisStep ? "opacity-100" : "opacity-30"
+                } ${i === analysisStep ? "animate-pulse text-primary font-medium" : ""}`}
+              >
+                {i <= analysisStep ? "✓" : "•"} {step}
+              </p>
+            ))}
           </div>
           <div className="flex gap-1 justify-center">
             {[0, 1, 2].map((i) => (
@@ -342,7 +268,7 @@ export default function AnalysisPage() {
           </div>
         </Card>
 
-        {/* Congratulations Card (show on new analysis) */}
+        {/* Congratulations Card */}
         {showCongrats && (
           <Card className="p-5 border-yellow-500/30 bg-yellow-500/5 animate-fade-in">
             <div className="flex items-start gap-4">
@@ -373,10 +299,10 @@ export default function AnalysisPage() {
         <Card variant="glass" className="p-5">
           <h3 className="font-semibold mb-4">Análise Detalhada</h3>
           <div className="space-y-4">
-            <ScoreBar label="Linha da mandíbula" score={scores.jawline} />
-            <ScoreBar label="Simetria facial" score={scores.symmetry} />
             <ScoreBar label="Qualidade da pele" score={scores.skinQuality} />
+            <ScoreBar label="Linha da mandíbula" score={scores.jawline} />
             <ScoreBar label="Maçãs do rosto" score={scores.cheekbones} />
+            <ScoreBar label="Simetria facial" score={scores.symmetry} />
           </div>
         </Card>
 
@@ -445,7 +371,7 @@ export default function AnalysisPage() {
           <ChevronRight className="w-5 h-5" />
         </Button>
 
-        {/* New Analysis Button - always visible */}
+        {/* New Analysis Button */}
         <Button
           variant="neonOutline"
           size="lg"
@@ -458,10 +384,17 @@ export default function AnalysisPage() {
         </Button>
         
         {!canDoNewAnalysis && (
-          <p className="text-center text-sm text-yellow-500">
-            ⚠️ Você já atingiu o limite de 3 análises nesta semana. Tente novamente daqui alguns dias.
-          </p>
+          <Card className="p-3 border-orange-500/20 bg-orange-500/5">
+            <p className="text-sm text-orange-400 text-center">
+              Limite semanal atingido. Você poderá fazer nova análise em breve.
+            </p>
+          </Card>
         )}
+
+        {/* Remaining analyses */}
+        <p className="text-xs text-center text-muted-foreground">
+          {getRemainingAnalyses()} {getRemainingAnalyses() === 1 ? "análise restante" : "análises restantes"} esta semana
+        </p>
       </div>
 
       <BottomNav />
