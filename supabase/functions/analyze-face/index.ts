@@ -94,11 +94,20 @@ serve(async (req) => {
     console.log("Image size:", Math.round(imageBase64.length / 1024), "KB");
 
     // Prepare the image for the API
-    // Handle both data URL and raw base64
+    // Ensure we have a proper data URL format
     let imageDataUrl = imageBase64;
-    if (!imageBase64.startsWith("data:")) {
-      imageDataUrl = `data:image/jpeg;base64,${imageBase64}`;
+    
+    // If it's already a data URL, extract and re-format it
+    if (imageBase64.startsWith("data:")) {
+      // Keep as-is if it's already a proper data URL
+      imageDataUrl = imageBase64;
+    } else {
+      // Clean the base64 string and add proper prefix
+      const cleanBase64 = imageBase64.replace(/\s/g, '');
+      imageDataUrl = `data:image/jpeg;base64,${cleanBase64}`;
     }
+
+    console.log("Image data URL prefix:", imageDataUrl.substring(0, 50));
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
