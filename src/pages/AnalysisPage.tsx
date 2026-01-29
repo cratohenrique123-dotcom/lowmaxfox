@@ -8,7 +8,7 @@ import { useApp } from "@/context/AppContext";
 import { ChevronLeft, Sparkles, AlertCircle, ChevronRight, Trophy, Camera, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
-// Convert blob URL to base64
+// Convert blob URL to base64 data URL (keeps the data:image prefix)
 async function blobUrlToBase64(blobUrl: string): Promise<string> {
   const response = await fetch(blobUrl);
   const blob = await response.blob();
@@ -17,9 +17,8 @@ async function blobUrlToBase64(blobUrl: string): Promise<string> {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
-      // Remove data URL prefix if present
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
+      // Return the full data URL (e.g., "data:image/jpeg;base64,...")
+      resolve(result);
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
