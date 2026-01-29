@@ -38,13 +38,12 @@ async function analyzeWithAI(imageBase64: string): Promise<{
   weaknesses: string[];
   tips: string[];
 }> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Configuração do servidor não encontrada");
-  }
+  // Use the full Supabase URL for the edge function
+  const supabaseUrl = "https://nohtxqjkaucbdykzliji.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vaHR4cWprYXVjYmR5a3psaWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2MjIyMzEsImV4cCI6MjA4NTE5ODIzMX0.b4mAkcpvmm80mzXZBB7j8s9sz3u-f1piKLQtwxVGQTk";
 
+  console.log("Calling analyze-face edge function...");
+  
   const response = await fetch(`${supabaseUrl}/functions/v1/analyze-face`, {
     method: "POST",
     headers: {
@@ -54,8 +53,11 @@ async function analyzeWithAI(imageBase64: string): Promise<{
     body: JSON.stringify({ imageBase64 }),
   });
 
+  console.log("Response status:", response.status);
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    console.error("Edge function error:", errorData);
     if (response.status === 429) {
       throw new Error("Limite de requisições atingido. Tente novamente em alguns minutos.");
     }
@@ -65,7 +67,9 @@ async function analyzeWithAI(imageBase64: string): Promise<{
     throw new Error(errorData.error || "Erro ao analisar imagem");
   }
 
-  return response.json();
+  const result = await response.json();
+  console.log("Analysis result received:", result);
+  return result;
 }
 
 export default function AnalysisPage() {
@@ -92,27 +96,33 @@ export default function AnalysisPage() {
         return;
       }
       
+      // Store the photo URL before analysis starts
+      const photoUrl = userData.photos.front!;
+      
       // Run AI analysis
       const runAnalysis = async () => {
+        let stepInterval: ReturnType<typeof setInterval> | null = null;
+        
         try {
           // Animate steps
-          const stepInterval = setInterval(() => {
+          stepInterval = setInterval(() => {
             setAnalysisStep(prev => Math.min(prev + 1, 3));
           }, 1500);
 
           // Convert blob URL to base64
           console.log("Converting image to base64...");
-          const imageBase64 = await blobUrlToBase64(userData.photos.front!);
-          console.log("Image converted, calling AI...");
+          const imageBase64 = await blobUrlToBase64(photoUrl);
+          console.log("Image converted, size:", Math.round(imageBase64.length / 1024), "KB");
 
           // Call AI
+          console.log("Calling AI analysis...");
           const newScores = await analyzeWithAI(imageBase64);
           
-          clearInterval(stepInterval);
+          if (stepInterval) clearInterval(stepInterval);
           
           // Save scores
           setScores(newScores);
-          recordAnalysis(userData.photos.front || undefined);
+          recordAnalysis(photoUrl);
           setAnalyzing(false);
           setShowCongrats(true);
           
@@ -123,12 +133,14 @@ export default function AnalysisPage() {
             description: "Sua análise facial foi realizada com sucesso.",
           });
         } catch (error) {
+          if (stepInterval) clearInterval(stepInterval);
           console.error("Analysis error:", error);
           setAnalyzing(false);
+          
+          // Show error but DO NOT navigate away - keep user on this page with their photo preserved
           toast.error("Erro na análise", {
             description: error instanceof Error ? error.message : "Tente novamente mais tarde.",
           });
-          navigate("/photo-upload", { replace: true });
         }
       };
       
