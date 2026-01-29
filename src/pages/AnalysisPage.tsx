@@ -10,7 +10,21 @@ import { toast } from "sonner";
 
 // Convert blob URL to base64 data URL (keeps the data:image prefix)
 async function blobUrlToBase64(blobUrl: string): Promise<string> {
-  const response = await fetch(blobUrl);
+  let response: Response;
+  try {
+    response = await fetch(blobUrl);
+  } catch (e) {
+    throw new Error(
+      "Não foi possível ler a foto selecionada (a imagem pode ter sido descartada). Selecione a foto novamente e tente de novo."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      "Não foi possível carregar a foto selecionada. Selecione a foto novamente e tente de novo."
+    );
+  }
+
   const blob = await response.blob();
   
   return new Promise((resolve, reject) => {
@@ -45,9 +59,11 @@ async function analyzeWithAI(imageBase64: string): Promise<{
   
   const response = await fetch(`${supabaseUrl}/functions/v1/analyze-face`, {
     method: "POST",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${supabaseKey}`,
+      "Cache-Control": "no-cache",
     },
     body: JSON.stringify({ imageBase64 }),
   });
@@ -110,7 +126,7 @@ export default function AnalysisPage() {
 
           // Convert blob URL to base64
           console.log("Converting image to base64...");
-          const imageBase64 = await blobUrlToBase64(photoUrl);
+          const imageBase64 = (await blobUrlToBase64(photoUrl)).replace(/\s/g, "");
           console.log("Image converted, size:", Math.round(imageBase64.length / 1024), "KB");
 
           // Call AI

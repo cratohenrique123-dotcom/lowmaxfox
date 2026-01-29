@@ -15,6 +15,10 @@ export default function PhotoUploadPage() {
   const [loading, setLoading] = useState(false);
   const [loadingPhoto, setLoadingPhoto] = useState(false);
 
+  // When navigating to /analysis we must NOT revoke the blob URL,
+  // otherwise the analysis page cannot read the selected image.
+  const navigatingToAnalysisRef = useRef(false);
+
   // Controle de concorrência
   const latestProcessRef = useRef(0);
   const activePreviewRef = useRef<string | null>(userData.photos.front);
@@ -100,6 +104,7 @@ export default function PhotoUploadPage() {
 
   useEffect(() => {
     return () => {
+      if (navigatingToAnalysisRef.current) return;
       revokeIfBlobUrl(activePreviewRef.current);
     };
   }, [revokeIfBlobUrl]);
@@ -305,6 +310,7 @@ export default function PhotoUploadPage() {
     
     if (hasPhoto) {
       setLoading(true);
+      navigatingToAnalysisRef.current = true;
       navigate("/analysis", { state: { newAnalysis: true }, replace: true });
     }
   };
